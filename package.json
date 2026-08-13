@@ -1,0 +1,33 @@
+{
+  "name": "gsheets-timeline",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:gscript": "npm run build && node scripts/prepare-sidebar.js",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "clasp:login": "clasp login",
+    "clasp:push": "clasp push --force",
+    "clasp:pull": "clasp pull"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.0",
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.10",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^2.1.8"
+  }
+}
