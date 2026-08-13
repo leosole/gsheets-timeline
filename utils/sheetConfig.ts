@@ -11,6 +11,7 @@ export interface SpreadsheetConfig {
   title: string
   sheetName?: string
   sheetUrl?: string
+  statusField?: string
   fieldMap: TimelineFieldMap
   popupFields: string[]
   filterFields: string[]
@@ -27,6 +28,7 @@ export const DEFAULT_SPREADSHEET_CONFIG: SpreadsheetConfig = {
   title: 'Timeline',
   sheetName: '',
   sheetUrl: '',
+  statusField: '',
   fieldMap: DEFAULT_FIELD_MAP,
   popupFields: ['Owner', 'Status', 'Notes'],
   filterFields: ['Owner', 'Status']
@@ -38,6 +40,35 @@ export const normalizeFieldMap = (fieldMap?: Partial<TimelineFieldMap>): Timelin
   end: fieldMap?.end || DEFAULT_FIELD_MAP.end,
   due: fieldMap?.due || DEFAULT_FIELD_MAP.due
 })
+
+export const normalizeStatusField = (statusField?: string): string => statusField || ''
+
+export type TimelineLayout = 'settings' | 'timeline'
+
+export const resolveTimelineLayout = (mode?: string | null): TimelineLayout => {
+  if (mode === 'timeline') return 'timeline'
+  return 'settings'
+}
+
+export const buildFieldOptions = (rows: TimelineRow[] = [], headers: string[] = []): string[] => {
+  const options = new Set<string>()
+
+  headers.forEach(header => {
+    if (typeof header === 'string' && header.trim()) {
+      options.add(header.trim())
+    }
+  })
+
+  rows.forEach(row => {
+    Object.keys(row || {}).forEach(key => {
+      if (typeof key === 'string' && key.trim()) {
+        options.add(key.trim())
+      }
+    })
+  })
+
+  return Array.from(options).sort()
+}
 
 export const sanitizeSpreadsheetData = (rows: TimelineRow[], fieldMap: TimelineFieldMap): any[] => {
   return rows

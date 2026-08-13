@@ -1,37 +1,91 @@
-import React from 'react'
+import React, { useMemo, useRef } from 'react'
 
-export const Legend: React.FC = () => {
+interface LegendProps {
+  statusOptions?: string[]
+  statusColors?: Record<string, string>
+  hasCustomStatusField?: boolean
+}
+
+const DEFAULT_STATUS_COLORS: Record<string, string> = {
+  'Fazendo': '#facc15',
+  'Concluído': '#22c55e',
+  'Atrasado': '#ef4444',
+  'Não iniciado': '#9ca3af'
+}
+
+const BASE_LEGEND_ITEMS = [
+  { label: 'Previsto (atrasado)', kind: 'line', color: '#ef4444' },
+  { label: 'Concluído antes do previsto', kind: 'swatch', color: 'oklch(0.84 0 0)' },
+  { label: 'Hoje', kind: 'line', color: 'var(--timeline-today, #4a90d9)' }
+]
+
+const DEFAULT_STATUS_LABELS = ['Fazendo', 'Concluído', 'Atrasado', 'Não iniciado']
+
+export const Legend: React.FC<LegendProps> = ({ statusOptions = [], statusColors = {}, hasCustomStatusField = false }) => {
+  const colorInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const dynamicItems = useMemo(() => {
+    if (!hasCustomStatusField) {
+      return DEFAULT_STATUS_LABELS.map(label => ({
+        label,
+        kind: 'swatch',
+        color: statusColors[label] || DEFAULT_STATUS_COLORS[label]
+      }))
+    }
+    return statusOptions.map((label, index) => ({
+      label,
+      kind: 'swatch',
+      color: statusColors[label] || `hsl(${(index * 63) % 360} 70% 60%)`
+    }))
+  }, [statusOptions, statusColors, hasCustomStatusField])
+
+  const handleColorChange = (label: string, nextColor: string) => {
+    const safeColor = nextColor || '#808080'
+    const nextColors = { ...statusColors, [label]: safeColor }
+    window.dispatchEvent(new CustomEvent('timeline:status-color-change', { detail: { label, color: safeColor } }))
+    Object.assign(statusColors, nextColors)
+  }
+
   return (
-    <div className="border-t border-border bg-muted/50 px-4 py-3">
+    <div className="sticky bottom-0 z-40 border-t border-border bg-muted/50 px-4 py-3 shadow-[0_-1px_0_rgba(0,0,0,0.04)]">
       <div className="flex flex-wrap gap-5 text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-yellow-200 dark:bg-yellow-600 border border-yellow-300 dark:border-yellow-500 rounded" />
-          <span>Fazendo</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-200 dark:bg-green-500 border border-green-300 dark:border-green-400 rounded" />
-          <span>Concluído</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-200 dark:bg-red-500 border border-red-300 dark:border-red-400 rounded" />
-          <span>Atrasado</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-gray-200 dark:bg-gray-500 border border-gray-300 dark:border-gray-400 rounded" />
-          <span>Não iniciado</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-0.5 h-4 bg-red-500" />
-          <span>Previsto (atrasado)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded" style={{ backgroundColor: 'oklch(0.84 0 0)', border: '1px solid oklch(0.84 0 0)' }} />
-          <span>Concluído antes do previsto</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-0.5 h-4 bg-timeline-today" />
-          <span>Hoje</span>
-        </div>
+        {dynamicItems.map(item => (
+          <div key={item.label} className="flex items-center gap-2">
+            <div
+              className={hasCustomStatusField ? "h-3 w-3 rounded cursor-pointer hover:opacity-80 transition-opacity" : "h-3 w-3 rounded"}
+              style={{ backgroundColor: item.color, border: `1px solid ${item.color}` }}
+              onClick={() => {
+                if (hasCustomStatusField) {
+                  colorInputRefs.current[item.label]?.click()
+                }
+              }}
+              title={hasCustomStatusField ? "Click to change color" : undefined}
+            />
+            {hasCustomStatusField && (
+              <input
+                ref={node => {
+                  if (node) colorInputRefs.current[item.label] = node
+                }}
+                type="color"
+                aria-label={`Choose color for ${item.label}`}
+                value={item.color}
+                className="hidden"
+                onChange={event => handleColorChange(item.label, event.target.value)}
+              />
+            )}
+            <span>{item.label}</span>
+          </div>
+        ))}
+        {BASE_LEGEND_ITEMS.map(item => (
+          <div key={item.label} className="flex items-center gap-2">
+            {item.kind === 'line' ? (
+              <div className="h-4 w-0.5" style={{ backgroundColor: item.color }} />
+            ) : (
+              <div className="h-3 w-3 rounded" style={{ backgroundColor: item.color, border: `1px solid ${item.color}` }} />
+            )}
+            <span>{item.label}</span>
+          </div>
+        ))}
       </div>
     </div>
   )

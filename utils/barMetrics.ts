@@ -13,6 +13,14 @@ export interface BarMetrics {
   status: string
   statuses: string[]
   colors: { bg: string; border: string }
+  customColors?: { bg: string; border: string }
+}
+
+export const DEFAULT_STATUS_COLORS: Record<string, string> = {
+  'Fazendo': '#facc15',
+  'Concluído': '#22c55e',
+  'Atrasado': '#ef4444',
+  'Não iniciado': '#9ca3af'
 }
 
 export const getStatusColors = (status: string) => {
@@ -38,7 +46,11 @@ const STATUS_SEVERITY: Record<string, number> = {
 const pickPrimaryStatus = (statuses: string[]): string =>
   statuses.sort((a, b) => (STATUS_SEVERITY[b] || 0) - (STATUS_SEVERITY[a] || 0))[0] || 'Não iniciado'
 
-export const getTaskStatuses = (task: any): string[] => {
+export const getTaskStatuses = (task: any, statusField?: string): string[] => {
+  if (statusField && task[statusField] !== undefined && task[statusField] !== null && String(task[statusField]).trim()) {
+    return [String(task[statusField]).trim()]
+  }
+
   const now = dayjs().startOf('day')
   const start = parseDate(task.start)
   const end = parseDate(task.end)
@@ -61,10 +73,28 @@ export const getTaskStatuses = (task: any): string[] => {
   return result
 }
 
+export const getStatusColorValue = (status: string, customColors: Record<string, string> = {}): { bg: string; border: string } => {
+  const custom = customColors[status]
+  if (custom) {
+    return {
+      bg: custom,
+      border: custom
+    }
+  }
+
+  const legacy = getStatusColors(status)
+  return {
+    bg: legacy.bg,
+    border: legacy.border
+  }
+}
+
 export const calculateBarMetrics = (
   task: any,
   timelineData: TimelineData,
-  granularity: Granularity
+  granularity: Granularity,
+  statusField?: string,
+  statusColors: Record<string, string> = {}
 ): BarMetrics | null => {
   if (!task.start) return null
 
@@ -74,9 +104,13 @@ export const calculateBarMetrics = (
   const end = parseDate(task.end)
   const due = parseDate(task.due)
   const now = dayjs().startOf('day')
-  const statuses = getTaskStatuses(task)
+  const statuses = getTaskStatuses(task, statusField)
   const status = pickPrimaryStatus(statuses)
-  const colors = (statuses.includes('Atrasado') && !end) ? getStatusColors('Fazendo') : getStatusColors(status)
+  const hasExplicitStatus = Boolean(statusField && task[statusField] !== undefined && task[statusField] !== null && String(task[statusField]).trim())
+  const colors = !hasExplicitStatus
+    ? getStatusColors(status)
+    : (statuses.includes('Atrasado') && !end) ? getStatusColors('Fazendo') : getStatusColors(status)
+  const customColors = hasExplicitStatus ? getStatusColorValue(status, statusColors) : { bg: '', border: '' }
 
   const startISO = formatDateToISO(task.start)
   if (!startISO) return null
@@ -113,7 +147,11 @@ export const calculateBarMetrics = (
       }
     }
 
-    if (statuses.includes('Atrasado') && plannedEndPx !== undefined) {
+    // Check if task is actually overdue based on dates (not status field)
+    // This applies to both default and custom statuses
+    // Atrasado (overdue) if: due date is in past AND (task not completed OR completed after due date)
+    const isActuallyOverdue = due.isBefore(now) && (!end || end.isAfter(due))
+    if (isActuallyOverdue && plannedEndPx !== undefined) {
       // Overdue: red stripes from due date to end date (or today if no end)
       const overdueEnd = end || now
       const overdueEndPx = overdueEnd.isAfter(due)
@@ -137,5 +175,5 @@ export const calculateBarMetrics = (
     delayWidth = now.diff(start, 'day') * timelineData.daySize
   }
 
-  return { startPx, width, barEndPx: endPxValue, plannedEndPx, overdueStartPx, overdueWidth, completedEarlyWidth, delayWidth, status, statuses, colors }
+  return { startPx, width, barEndPx: endPxValue, plannedEndPx, overdueStartPx, overdueWidth, completedEarlyWidth, delayWidth, status, statuses, colors, customColors }
 }

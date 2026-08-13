@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Timeline } from './components/Timeline'
 import {
   DEFAULT_SPREADSHEET_CONFIG,
+  buildFieldOptions,
   normalizeFieldMap,
+  normalizeStatusField,
+  resolveTimelineLayout,
   sanitizeSpreadsheetData,
   type SpreadsheetConfig
 } from './utils/sheetConfig'
@@ -11,6 +14,7 @@ import {
 declare global {
   interface Window {
     __TIMELINE_DATA__?: any[]
+    __TIMELINE_HEADERS__?: string[]
     __TIMELINE_CONFIG__?: Partial<SpreadsheetConfig>
     __TIMELINE_REFRESH__?: () => void
   }
@@ -33,6 +37,7 @@ const getHostConfig = (hostConfig: Partial<SpreadsheetConfig> = {}): Spreadsheet
 
   return {
     ...base,
+    statusField: normalizeStatusField(hostConfig.statusField),
     fieldMap: normalizeFieldMap(hostConfig.fieldMap),
     popupFields: Array.isArray(hostConfig.popupFields) ? hostConfig.popupFields : DEFAULT_SPREADSHEET_CONFIG.popupFields,
     filterFields: Array.isArray(hostConfig.filterFields) ? hostConfig.filterFields : DEFAULT_SPREADSHEET_CONFIG.filterFields
@@ -47,33 +52,38 @@ const getWindowData = (): any[] => {
   return Array.isArray(window.__TIMELINE_DATA__) ? window.__TIMELINE_DATA__ : []
 }
 
-const getSheetPayload = (): Promise<{ rows: any[]; config: SpreadsheetConfig }> => {
+const getWindowHeaders = (): string[] => {
+  return Array.isArray(window.__TIMELINE_HEADERS__) ? window.__TIMELINE_HEADERS__ : []
+}
+
+const getSheetPayload = (): Promise<{ rows: any[]; headers: string[]; config: SpreadsheetConfig }> => {
   return new Promise((resolve) => {
     const appsScriptGoogle = (globalThis as any).google
 
     if (!appsScriptGoogle || !appsScriptGoogle.script || !appsScriptGoogle.script.run) {
-      resolve({ rows: getWindowData(), config: getWindowConfig() })
+      resolve({ rows: getWindowData(), headers: getWindowHeaders(), config: getWindowConfig() })
       return
     }
 
-    appsScriptGoogle.script.run.withSuccessHandler((payload: string | { rows?: any[]; config?: Partial<SpreadsheetConfig> }) => {
+    appsScriptGoogle.script.run.withSuccessHandler((payload: string | { rows?: any[]; headers?: string[]; config?: Partial<SpreadsheetConfig> }) => {
       try {
         const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload || {}
         const rows = Array.isArray(parsed.rows) ? parsed.rows : getWindowData()
+        const headers = Array.isArray(parsed.headers) ? parsed.headers : getWindowHeaders()
         const config = getHostConfig(parsed.config || getWindowConfig())
-        resolve({ rows, config })
+        resolve({ rows, headers, config })
       } catch (error) {
-        resolve({ rows: getWindowData(), config: getWindowConfig() })
+        resolve({ rows: getWindowData(), headers: getWindowHeaders(), config: getWindowConfig() })
       }
     }).getSheetState();
   })
 }
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabName>('timeline')
+  const [activeTab, setActiveTab] = useState<TabName>(() => resolveTimelineLayout((window as any).__TIMELINE_MODE__) === 'timeline' ? 'timeline' : 'settings')
   const [config, setConfig] = useState<SpreadsheetConfig>(() => getWindowConfig())
   const [rows, setRows] = useState<any[]>(() => getWindowData())
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [headers, setHeaders] = useState<string[]>(() => getWindowHeaders())
 
   useEffect(() => {
     const hasInjectedState = Array.isArray(window.__TIMELINE_DATA__) || !!window.__TIMELINE_CONFIG__
@@ -81,14 +91,16 @@ export const App: React.FC = () => {
     const appsScriptGoogle = (globalThis as any).google
 
     if (!hasInjectedState && appsScriptGoogle && appsScriptGoogle.script && appsScriptGoogle.script.run) {
-      getSheetPayload().then(({ rows, config }) => {
+      getSheetPayload().then(({ rows, headers, config }) => {
         setRows(rows)
+        setHeaders(headers)
         setConfig(config)
       })
       return
     }
 
     setRows(getWindowData())
+    setHeaders(getWindowHeaders())
     setConfig(getWindowConfig())
   }, [])
 
@@ -96,33 +108,34 @@ export const App: React.FC = () => {
     window.__TIMELINE_CONFIG__ = config
   }, [config])
 
-  const fieldOptions = useMemo(() => {
-    const options = new Set<string>()
-    rows.forEach(row => {
-      Object.keys(row || {}).forEach(key => options.add(key))
-    })
-    return Array.from(options).sort()
-  }, [rows])
+  useEffect(() => {
+    window.__TIMELINE_HEADERS__ = headers
+  }, [headers])
+
+  useEffect(() => {
+    const mode = resolveTimelineLayout((window as any).__TIMELINE_MODE__)
+    if (mode === 'timeline') {
+      setActiveTab('timeline')
+      return
+    }
+    setActiveTab('settings')
+  }, [])
+
+  const fieldOptions = useMemo(() => buildFieldOptions(rows, headers), [rows, headers])
+
+  const metadataFields = useMemo(() => {
+    const coreFields = new Set<string>([
+      config.fieldMap.name,
+      config.fieldMap.start,
+      config.fieldMap.end,
+      config.fieldMap.due,
+      config.statusField || ''
+    ].filter(Boolean))
+
+    return fieldOptions.filter(option => !coreFields.has(option))
+  }, [fieldOptions, config.fieldMap, config.statusField])
 
   const tasks = useMemo(() => sanitizeSpreadsheetData(rows, config.fieldMap), [rows, config.fieldMap])
-
-  const syncWithSheet = () => {
-    setIsRefreshing(true)
-    const nextRows = getWindowData()
-    setRows(nextRows)
-    setConfig(getWindowConfig())
-
-    if (typeof window.__TIMELINE_REFRESH__ === 'function') {
-      try {
-        window.__TIMELINE_REFRESH__()
-      } catch (error) {
-        console.warn('Refresh callback failed:', error)
-      }
-    }
-
-    window.dispatchEvent(new CustomEvent('timeline:refresh', { detail: { rows: nextRows, config } }))
-    window.setTimeout(() => setIsRefreshing(false), 150)
-  }
 
   const updateFieldSelection = (key: 'name' | 'start' | 'end' | 'due', value: string) => {
     setConfig(current => ({
@@ -161,23 +174,17 @@ export const App: React.FC = () => {
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sheet name</label>
-        <input
-          value={config.sheetName || ''}
-          onChange={event => setConfig(current => ({ ...current, sheetName: event.target.value }))}
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status column</label>
+        <select
+          value={config.statusField || ''}
+          onChange={event => setConfig(current => ({ ...current, statusField: event.target.value }))}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          placeholder="Sheet1"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sheet URL</label>
-        <input
-          value={config.sheetUrl || ''}
-          onChange={event => setConfig(current => ({ ...current, sheetUrl: event.target.value }))}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          placeholder="https://docs.google.com/spreadsheets/..."
-        />
+        >
+          <option value="">None</option>
+          {fieldOptions.map(option => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -206,7 +213,7 @@ export const App: React.FC = () => {
       <div className="space-y-2">
         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Popup extra fields</label>
         <div className="flex flex-wrap gap-2">
-          {fieldOptions.map(option => (
+          {metadataFields.map(option => (
             <label key={option} className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1 text-xs">
               <input
                 type="checkbox"
@@ -222,7 +229,7 @@ export const App: React.FC = () => {
       <div className="space-y-2">
         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Filter fields</label>
         <div className="flex flex-wrap gap-2">
-          {fieldOptions.map(option => (
+          {metadataFields.map(option => (
             <label key={option} className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1 text-xs">
               <input
                 type="checkbox"
@@ -238,13 +245,13 @@ export const App: React.FC = () => {
   )
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-full min-h-0 bg-background text-foreground" style={{ resize: 'both', overflow: 'auto' }}>
       <div className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="text-lg font-bold">Timeline</div>
             <div className="flex rounded-lg border border-border bg-background p-1">
-              {(['timeline', 'settings'] as const).map(tab => (
+              {(['settings', 'timeline'] as const).map(tab => (
                 <button
                   key={tab}
                   type="button"
@@ -260,15 +267,6 @@ export const App: React.FC = () => {
               ))}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={syncWithSheet}
-            disabled={isRefreshing}
-            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isRefreshing ? 'Updating…' : 'Update'}
-          </button>
         </div>
       </div>
 
@@ -281,6 +279,7 @@ export const App: React.FC = () => {
               filterFields={config.filterFields}
               popupFields={config.popupFields}
               sheetUrl={config.sheetUrl}
+              statusField={config.statusField}
             />
           ) : (
             <div className="flex min-h-[60vh] items-center justify-center p-8 text-center">

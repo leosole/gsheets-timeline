@@ -7,6 +7,8 @@ interface TaskPopoverProps {
   task: any
   popupFields?: string[]
   onClose: () => void
+  statusField?: string
+  statusColors?: Record<string, string>
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -37,9 +39,9 @@ const STATUS_LABEL: Record<string, string> = {
   'Não iniciado': 'Não iniciado'
 }
 
-export const TaskPopover: React.FC<TaskPopoverProps> = ({ task, popupFields = [], onClose }) => {
+export const TaskPopover: React.FC<TaskPopoverProps> = ({ task, popupFields = [], onClose, statusField, statusColors = {} }) => {
   const ref = useRef<HTMLDivElement>(null)
-  const statuses = getTaskStatuses(task)
+  const statuses = getTaskStatuses(task, statusField)
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -70,41 +72,46 @@ export const TaskPopover: React.FC<TaskPopoverProps> = ({ task, popupFields = []
   const due = parseDate(task.due)
 
   const detailLines: string[] = []
-  if (statuses.includes('Atrasado') && due) {
-    const diff = now.diff(due, 'day')
-    detailLines.push(`Atrasado em ${diff} dia(s)`)
-    if (end && due) {
-      const endDiff = end.diff(due, 'day')
-      if (endDiff > 0) detailLines.push(`Concluído ${endDiff} dia(s) após o previsto`)
+  const isCustomStatus = Boolean(statusField && task[statusField])
+  
+  // Only show derived detail lines if using default statuses, not custom statuses
+  if (!isCustomStatus) {
+    if (statuses.includes('Atrasado') && due) {
+      const diff = now.diff(due, 'day')
+      detailLines.push(`Atrasado em ${diff} dia(s)`)
+      if (end && due) {
+        const endDiff = end.diff(due, 'day')
+        if (endDiff > 0) detailLines.push(`Concluído ${endDiff} dia(s) após o previsto`)
+      }
     }
-  }
-  if (statuses.includes('Concluído') && end && due) {
-    const diff = end.diff(due, 'day')
-    if (diff <= 0) {
-      detailLines.push(`Concluído ${Math.abs(diff) === 0 ? 'no prazo' : `${Math.abs(diff)} dia(s) antes do previsto`}`)
+    if (statuses.includes('Concluído') && end && due) {
+      const diff = end.diff(due, 'day')
+      if (diff <= 0) {
+        detailLines.push(`Concluído ${Math.abs(diff) === 0 ? 'no prazo' : `${Math.abs(diff)} dia(s) antes do previsto`}`)
+      }
+    } else if (statuses.includes('Concluído') && end && !due) {
+      detailLines.push('Concluído (sem data prevista)')
     }
-  } else if (statuses.includes('Concluído') && end && !due) {
-    detailLines.push('Concluído (sem data prevista)')
-  }
-  if (statuses.includes('Fazendo') && !statuses.includes('Atrasado') && due) {
-    const remaining = due.diff(now, 'day')
-    if (remaining < 0) {
-      detailLines.push(`Atrasado em ${Math.abs(remaining)} dia(s)`)
-    } else if (remaining === 0) {
-      detailLines.push('Vence hoje')
-    } else if (remaining <= 3) {
-      detailLines.push(`Vence em ${remaining} dia(s)`)
-    } else {
-      detailLines.push('No prazo')
+    if (statuses.includes('Fazendo') && !statuses.includes('Atrasado') && due) {
+      const remaining = due.diff(now, 'day')
+      if (remaining < 0) {
+        detailLines.push(`Atrasado em ${Math.abs(remaining)} dia(s)`)
+      } else if (remaining === 0) {
+        detailLines.push('Vence hoje')
+      } else if (remaining <= 3) {
+        detailLines.push(`Vence em ${remaining} dia(s)`)
+      } else {
+        detailLines.push('No prazo')
+      }
     }
-  }
-  if (statuses.includes('Não iniciado')) {
-    if (start && start.isBefore(now)) {
-      const delay = now.diff(start, 'day')
-      detailLines.push(`Atrasado para iniciar (${delay} dia(s))`)
-    } else if (start) {
-      const remaining = start.diff(now, 'day')
-      detailLines.push(`Agendado para iniciar em ${remaining} dia(s)`)
+    if (statuses.includes('Não iniciado')) {
+      if (start && start.isBefore(now)) {
+        const delay = now.diff(start, 'day')
+        detailLines.push(`Atrasado para iniciar (${delay} dia(s))`)
+      } else if (start) {
+        const remaining = start.diff(now, 'day')
+        detailLines.push(`Agendado para iniciar em ${remaining} dia(s)`)
+      }
     }
   }
 
@@ -127,12 +134,30 @@ export const TaskPopover: React.FC<TaskPopoverProps> = ({ task, popupFields = []
 
         <div className="p-4 space-y-3">
           <div className="flex flex-wrap gap-1.5">
-            {statuses.map(s => (
-              <div key={s} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-transparent ${STATUS_BORDER[s]} ${STATUS_COLOR[s]}`}>
-                <span>{STATUS_ICON[s]}</span>
-                <span>{STATUS_LABEL[s] || s}</span>
-              </div>
-            ))}
+            {statuses.map(s => {
+              const isCustom = isCustomStatus
+              const color = isCustom && statusColors[s]
+                ? `text-white` // When using custom colors, use white text for contrast
+                : (STATUS_COLOR[s] || 'text-slate-600 dark:text-slate-300')
+              const bgColor = isCustom && statusColors[s]
+                ? statusColors[s] // Use the hex color directly as background
+                : undefined
+              const border = isCustom && statusColors[s]
+                ? 'border-slate-300 dark:border-slate-600'
+                : (STATUS_BORDER[s] || 'border-slate-300 dark:border-slate-600')
+              const icon = isCustom ? '●' : (STATUS_ICON[s] || '●')
+
+              return (
+                <div
+                  key={s}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-transparent ${border} ${color}`}
+                  style={bgColor ? { backgroundColor: bgColor, color: 'white', borderColor: bgColor } : undefined}
+                >
+                  <span>{icon}</span>
+                  <span>{isCustom ? s : (STATUS_LABEL[s] || s)}</span>
+                </div>
+              )
+            })}
           </div>
 
           {detailLines.length > 0 && (

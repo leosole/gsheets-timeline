@@ -14,9 +14,10 @@ interface TimelineProps {
   filterFields?: string[]
   popupFields?: string[]
   sheetUrl?: string | null
+  statusField?: string
 }
 
-export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', filterFields = [], popupFields = [], sheetUrl }) => {
+export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', filterFields = [], popupFields = [], sheetUrl, statusField }) => {
   const [filter, setFilter] = useState('')
   const [granularity, setGranularity] = useState<Granularity>('week')
   const [mouseDatePx, setMouseDatePx] = useState<number | undefined>()
@@ -24,6 +25,7 @@ export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', f
   const [selectedTask, setSelectedTask] = useState<any>(null)
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [extraFieldFilters, setExtraFieldFilters] = useState<Record<string, string>>({})
+  const [statusColors, setStatusColors] = useState<Record<string, string>>({})
 
   const dateRange = calculateDateRange(tasks)
   const timelineData = generateTimelineData(dateRange, granularity)
@@ -34,15 +36,56 @@ export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', f
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const barsContainerRef = useRef<HTMLDivElement>(null)
 
-  // Compute filter options from tasks
+  // Compute filter options from tasks (excluding metadata columns that should never be filters)
   const filterOptions = useMemo(() => {
     const opts: Record<string, string[]> = {}
     if (!filterFields.length) return opts
+    const coreFields = new Set(['name', 'start', 'end', 'due', 'status'])
     filterFields.forEach(f => {
+      if (coreFields.has(f.toLowerCase())) return
       opts[f] = [...new Set(tasks.map(t => String(t[f] ?? '')).filter(Boolean))].sort()
     })
     return opts
   }, [tasks, filterFields])
+
+  const statusOptions = useMemo(() => {
+    const values = new Set<string>()
+    if (statusField) {
+      tasks.forEach(task => {
+        const value = task[statusField]
+        if (value !== undefined && value !== null && String(value).trim()) {
+          values.add(String(value).trim())
+        }
+      })
+    }
+    return Array.from(values).sort()
+  }, [tasks, statusField])
+
+  useEffect(() => {
+    const handleStatusColor = (event: Event) => {
+      const detail = (event as CustomEvent<{ label: string; color: string }>).detail
+      if (!detail) return
+      setStatusColors(prev => ({ ...prev, [detail.label]: detail.color }))
+    }
+    window.addEventListener('timeline:status-color-change', handleStatusColor)
+    return () => window.removeEventListener('timeline:status-color-change', handleStatusColor)
+  }, [])
+
+  // Initialize random colors for custom status options
+  useEffect(() => {
+    if (statusField && statusOptions.length > 0) {
+      setStatusColors(prev => {
+        const colors = { ...prev }
+        statusOptions.forEach((option, index) => {
+          if (!colors[option]) {
+            const randomHue = (index * 63 + Math.floor(Math.random() * 30)) % 360
+            colors[option] = `hsl(${randomHue} 70% 60%)`
+          }
+        })
+        return colors
+      })
+    }
+  }, [statusField, statusOptions.join(',')])
 
   const handleExtraFieldFilter = (field: string, value: string) => {
     setExtraFieldFilters(prev => {
@@ -53,9 +96,16 @@ export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', f
     })
   }
 
+  const getTaskStatusMatches = (task: any): string[] => {
+    if (statusField && task[statusField] !== undefined && task[statusField] !== null && String(task[statusField]).trim()) {
+      return [String(task[statusField]).trim()]
+    }
+    return getTaskStatuses(task)
+  }
+
   const displayedTasks = tasks
     .filter(t => {
-      if (statusFilter.length > 0 && !statusFilter.some(s => getTaskStatuses(t).includes(s))) return false
+      if (statusFilter.length > 0 && !statusFilter.some(s => getTaskStatusMatches(t).includes(s))) return false
       for (const [field, val] of Object.entries(extraFieldFilters)) {
         if (String(t[field] ?? '') !== val) return false
       }
@@ -127,8 +177,8 @@ export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', f
   const rowHeight = 40
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <header className="flex-shrink-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div>
           {sheetUrl ? (
             <a href={sheetUrl} target="_blank" rel="noopener noreferrer" className="text-xl font-bold hover:underline">
@@ -166,16 +216,17 @@ export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', f
         extraFieldFilters={extraFieldFilters}
         onExtraFieldFilterChange={handleExtraFieldFilter}
         filterOptions={filterOptions}
+        statusOptions={statusOptions}
       />
 
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex min-h-0 flex-1 overflow-hidden relative">
         {/* Sidebar */}
-        <div className="w-72 flex-shrink-0 border-r border-border flex flex-col">
+        <div className="w-72 flex-shrink-0 border-r border-border flex flex-col min-h-0">
           <div className="h-16 border-b border-border bg-muted/50 flex-shrink-0 flex items-center px-4">
             <span className="font-semibold text-sm text-foreground">Tarefas</span>
           </div>
           <div
-            className="flex-1 overflow-y-auto divide-y divide-border task-sidebar"
+            className="flex-1 min-h-0 overflow-y-auto divide-y divide-border task-sidebar"
             onScroll={handleSidebarScroll}
           >
             {displayedTasks.map((task, idx) => (
@@ -192,81 +243,80 @@ export const Timeline: React.FC<TimelineProps> = ({ tasks, title = 'Timeline', f
         </div>
 
         {/* Timeline area */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <div
-            ref={scrollContainerRef}
-            className="overflow-x-auto"
-            onScroll={handleScroll}
-          >
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <div
-              className="relative"
-              style={{ width: `${timelineData.totalDays * daySize}px` }}
-              onMouseMove={e => {
-                const rect = e.currentTarget.getBoundingClientRect()
-                setMouseDatePx(e.clientX - rect.left)
-              }}
-              onMouseLeave={() => setMouseDatePx(undefined)}
+              ref={barsContainerRef}
+              className="h-full overflow-y-auto overflow-x-auto"
+              onScroll={handleBarsScroll}
             >
-              <Header
-                timelineData={timelineData}
-                granularity={granularity}
-                daySize={daySize}
-                currentDatePx={currentDatePx}
-              />
-
               <div
-                ref={barsContainerRef}
-                className="overflow-y-auto"
-                style={{ maxHeight: 'calc(100vh - 200px)' }}
-                onScroll={handleBarsScroll}
+                className="relative"
+                style={{ width: `${timelineData.totalDays * daySize}px`, minWidth: '100%' }}
+                onMouseMove={e => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  setMouseDatePx(e.clientX - rect.left)
+                }}
+                onMouseLeave={() => setMouseDatePx(undefined)}
               >
+                <Header
+                  timelineData={timelineData}
+                  granularity={granularity}
+                  daySize={daySize}
+                  currentDatePx={currentDatePx}
+                />
+
                 {displayedTasks.map((task, idx) => (
                   <div key={idx} className="h-10 relative hover:bg-muted/30 flex items-center border-b border-border">
-                    <TaskBar task={task} timelineData={timelineData} granularity={granularity} onSelect={setSelectedTask} />
+                    <TaskBar task={task} timelineData={timelineData} granularity={granularity} onSelect={setSelectedTask} statusField={statusField} statusColors={statusColors} />
                   </div>
                 ))}
+
+                {/* Today line */}
+                {isCurrentDateVisible && (
+                  <div
+                    className="absolute w-0.5 bg-timeline-today z-20 pointer-events-none"
+                    style={{
+                      left: `${currentDatePx}px`,
+                      top: '64px',
+                      height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`
+                    }}
+                  />
+                )}
+
+                {/* Mouse date line */}
+                {mouseDatePx !== undefined && (
+                  <div
+                    className="absolute w-px bg-secondary z-20 pointer-events-none"
+                    style={{
+                      left: `${mouseDatePx}px`,
+                      top: '64px',
+                      height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`
+                    }}
+                  />
+                )}
+
+                {/* Today circle marker */}
+                {isCurrentDateVisible && (granularity === 'week' || granularity === 'month') && (
+                  <div
+                    className="absolute w-5 h-5 bg-timeline-today rounded-full z-30 pointer-events-none text-xs flex items-center justify-center text-white font-bold"
+                    style={{ left: `${currentDatePx - 10}px`, top: '50px' }}
+                  >
+                    {dayjs().date()}
+                  </div>
+                )}
               </div>
-
-              {/* Today line */}
-              {isCurrentDateVisible && (
-                <div
-                  className="absolute top-0 w-0.5 bg-timeline-today z-20 pointer-events-none"
-                  style={{
-                    left: `${currentDatePx}px`,
-                    height: `${displayedTasks.length * rowHeight + 64}px`
-                  }}
-                />
-              )}
-
-              {/* Mouse date line */}
-              {mouseDatePx !== undefined && (
-                <div
-                  className="absolute top-0 w-px bg-secondary z-20 pointer-events-none"
-                  style={{
-                    left: `${mouseDatePx}px`,
-                    height: `${displayedTasks.length * rowHeight + 64}px`
-                  }}
-                />
-              )}
-
-              {/* Today circle marker */}
-              {isCurrentDateVisible && (granularity === 'week' || granularity === 'month') && (
-                <div
-                  className="absolute w-5 h-5 bg-timeline-today rounded-full z-30 pointer-events-none text-xs flex items-center justify-center text-white font-bold"
-                  style={{ left: `${currentDatePx - 10}px`, top: '50px' }}
-                >
-                  {dayjs().date()}
-                </div>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      <Legend />
+      <div className="flex-shrink-0">
+        <Legend statusOptions={statusOptions} statusColors={statusColors} hasCustomStatusField={Boolean(statusField)} />
+      </div>
 
       {selectedTask && (
-        <TaskPopover task={selectedTask} popupFields={popupFields} onClose={() => setSelectedTask(null)} />
+        <TaskPopover task={selectedTask} popupFields={popupFields} onClose={() => setSelectedTask(null)} statusField={statusField} statusColors={statusColors} />
       )}
     </div>
   )

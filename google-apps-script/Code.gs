@@ -1,17 +1,19 @@
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Timeline')
-    .addItem('Configure timeline', 'showTimelineSidebar')
+    .addItem('Open timeline', 'showTimelineDialog')
     .addToUi();
 }
 
-function showTimelineSidebar() {
+function showTimelineDialog() {
   const html = HtmlService.createHtmlOutputFromFile('Sidebar')
-    .setTitle('Timeline configuration')
-    .setWidth(420)
+    .setTitle('Timeline')
+    .setWidth(1200)
     .setHeight(760);
 
-  SpreadsheetApp.getUi().showSidebar(html);
+  const content = html.getContent().replace('</head>', '<script>window.__TIMELINE_MODE__ = "settings";</script></head>');
+  html.setContent(content);
+  SpreadsheetApp.getUi().showModelessDialog(html, 'Timeline');
 }
 
 function getSheetState() {
@@ -49,14 +51,15 @@ function getSheetState() {
     title: sheet.getName(),
     sheetName: sheet.getName(),
     sheetUrl: SpreadsheetApp.getActiveSpreadsheet().getUrl(),
+    statusField: headers.find(h => /^(status|estado|situacao|state)$/i.test(h)) || '',
     fieldMap: {
       name: headers.find(h => /^(name|task|title)$/i.test(h)) || headers[0] || '',
-      start: headers.find(h => /^(start|start date|inicio|date inicio)$/i.test(h)) || '',
+      start: headers.find(h => /^(start|start date|inicio|date inicio|início)$/i.test(h)) || '',
       end: headers.find(h => /^(end|end date|fim|date fim)$/i.test(h)) || '',
-      due: headers.find(h => /^(due|deadline|prazo|previsto)$/i.test(h)) || ''
+      due: headers.find(h => /^(due|due date|deadline|prazo|previsto)$/i.test(h)) || ''
     },
-    popupFields: headers.filter(header => !/^(name|start|end|due)$/i.test(header)).slice(0, 6),
-    filterFields: headers.filter(header => !/^(name|start|end|due)$/i.test(header)).slice(0, 4)
+    popupFields: headers.filter(header => !/^(name|start|end|due|status|estado|situacao|state|prazo)$/i.test(header)).slice(0, 6),
+    filterFields: []
   };
 
   return JSON.stringify({ rows, headers, config });

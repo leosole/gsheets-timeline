@@ -7,10 +7,12 @@ interface TaskBarProps {
   timelineData: TimelineData
   granularity: Granularity
   onSelect?: (task: any) => void
+  statusField?: string
+  statusColors?: Record<string, string>
 }
 
-export const TaskBar: React.FC<TaskBarProps> = ({ task, timelineData, granularity, onSelect }) => {
-  const metrics = calculateBarMetrics(task, timelineData, granularity)
+export const TaskBar: React.FC<TaskBarProps> = ({ task, timelineData, granularity, onSelect, statusField, statusColors = {} }) => {
+  const metrics = calculateBarMetrics(task, timelineData, granularity, statusField, statusColors)
 
   if (!metrics) return null
 
@@ -19,14 +21,7 @@ export const TaskBar: React.FC<TaskBarProps> = ({ task, timelineData, granularit
       className="relative h-6 flex items-center"
       style={{ width: `${timelineData.totalDays * timelineData.daySize}px` }}
     >
-      <button
-        className="absolute h-4 rounded transition-all duration-200 z-10 cursor-pointer hover:outline-1 hover:outline-foreground"
-        style={{ left: `${metrics.startPx}px`, width: `${metrics.width}px` }}
-        onClick={() => onSelect?.(task)}
-      >
-        <div className={`w-full h-full rounded border ${metrics.colors.bg} ${metrics.colors.border}`} />
-      </button>
-
+      {/* Render overlays first so they appear on top due to stacking order and z-index */}
       {metrics.completedEarlyWidth !== undefined && metrics.completedEarlyWidth > 0 && (
         <div
           className="absolute h-4 rounded z-20 pointer-events-none"
@@ -69,6 +64,22 @@ export const TaskBar: React.FC<TaskBarProps> = ({ task, timelineData, granularit
           style={{ left: `${metrics.plannedEndPx}px` }}
         />
       )}
+
+      {/* Main bar button rendered last */}
+      <button
+        className="absolute h-4 rounded transition-all duration-200 z-10 cursor-pointer hover:outline-1 hover:outline-foreground"
+        style={{ left: `${metrics.startPx}px`, width: `${metrics.width}px` }}
+        onClick={() => onSelect?.(task)}
+      >
+        <div
+          className={`w-full h-full rounded border ${metrics.customColors && metrics.customColors.bg ? '' : `${metrics.colors.bg} ${metrics.colors.border}`}`}
+          style={metrics.customColors && metrics.customColors.bg ? {
+            backgroundColor: metrics.customColors.bg,
+            borderColor: metrics.customColors.border,
+            opacity: 1
+          } : undefined}
+        />
+      </button>
     </div>
   )
 }
