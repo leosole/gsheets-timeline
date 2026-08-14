@@ -1,6 +1,6 @@
 # gsheets-timeline
 
-A Google Sheets sidebar extension for rendering project timelines from spreadsheet data.
+A Google Sheets modal extension for rendering project timelines from spreadsheet data.
 
 ## What this project includes
 
@@ -8,7 +8,7 @@ A Google Sheets sidebar extension for rendering project timelines from spreadshe
 - configuration panel for selecting the columns used for task names and dates
 - popup fields for extra metadata on task click
 - refresh/update button to sync with the active sheet
-- Google Apps Script sidebar host for use directly inside Google Sheets
+- Google Apps Script modal host for use directly inside Google Sheets
 
 ## Google Sheets installation
 
@@ -16,11 +16,11 @@ A Google Sheets sidebar extension for rendering project timelines from spreadshe
 2. In the Apps Script editor, create a new project for this spreadsheet.
 3. Copy the files from the `google-apps-script/` folder into the Apps Script project:
    - `Code.gs`
-   - `Sidebar.html`
+   - `modal.html`
    - `appsscript.json`
 4. Save the project.
 5. Reload the spreadsheet and open the custom menu called `Timeline`.
-6. Select `Open timeline` to show the sidebar.
+6. Select `Open timeline` to show the modal.
 
 ## Spreadsheet layout
 
@@ -50,4 +50,4 @@ npm run dev
 
 ## Notes
 
-The sidebar loads the active sheet into the existing React timeline without changing the spreadsheet itself. The user can configure the field selection in the sidebar and click Update to refresh the timeline from the latest data.
+The modal loads the active sheet into the existing React timeline without changing the spreadsheet itself. The user can configure the field selection in the modal and click Update to refresh the timeline from the latest data.

@@ -1,8 +1,7 @@
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('Timeline')
-    .addItem('Open timeline', 'showTimelineDialog')
-    .addToUi();
+function onOpen(e) {
+  var menu = SpreadsheetApp.getUi().createAddonMenu();
+  menu.addItem('Open timeline', 'showTimelineDialog');
+  menu.addToUi();
 }
 
 function showTimelineDialog() {
@@ -63,6 +62,26 @@ function getSheetState() {
   };
 
   return JSON.stringify({ rows, headers, config });
+}
+
+function getSheetRows() {
+  const values = SpreadsheetApp.getActiveSheet().getDataRange().getValues();
+
+  if (!values.length) {
+    return JSON.stringify([]);
+  }
+
+  const headers = values[0]
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+
+  return JSON.stringify(values.slice(1).map(row => {
+    const rowObject = {};
+    headers.forEach((header, index) => {
+      rowObject[header] = row[index] !== undefined ? row[index] : '';
+    });
+    return rowObject;
+  }));
 }
 
 function doGet() {

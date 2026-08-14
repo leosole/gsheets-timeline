@@ -1,20 +1,33 @@
-import React from 'react'
-import { calculateBarMetrics } from '../utils/barMetrics'
-import type { TimelineData, Granularity } from '../utils/dateUtils'
+import React from "react";
+import { calculateBarMetrics } from "../utils/barMetrics";
+import type { TimelineData, Granularity } from "../utils/dateUtils";
 
 interface TaskBarProps {
-  task: any
-  timelineData: TimelineData
-  granularity: Granularity
-  onSelect?: (task: any) => void
-  statusField?: string
-  statusColors?: Record<string, string>
+  task: any;
+  timelineData: TimelineData;
+  granularity: Granularity;
+  onSelect?: (task: any) => void;
+  statusField?: string;
+  statusColors?: Record<string, string>;
 }
 
-export const TaskBar: React.FC<TaskBarProps> = ({ task, timelineData, granularity, onSelect, statusField, statusColors = {} }) => {
-  const metrics = calculateBarMetrics(task, timelineData, granularity, statusField, statusColors)
+export const TaskBar: React.FC<TaskBarProps> = ({
+  task,
+  timelineData,
+  granularity,
+  onSelect,
+  statusField,
+  statusColors = {},
+}) => {
+  const metrics = calculateBarMetrics(
+    task,
+    timelineData,
+    granularity,
+    statusField,
+    statusColors,
+  );
 
-  if (!metrics) return null
+  if (!metrics) return null;
 
   return (
     <div
@@ -22,48 +35,58 @@ export const TaskBar: React.FC<TaskBarProps> = ({ task, timelineData, granularit
       style={{ width: `${timelineData.totalDays * timelineData.daySize}px` }}
     >
       {/* Render overlays first so they appear on top due to stacking order and z-index */}
-      {metrics.completedEarlyWidth !== undefined && metrics.completedEarlyWidth > 0 && (
-        <div
-          className="absolute h-4 rounded z-20 pointer-events-none"
-          style={{
-            left: `${metrics.barEndPx}px`,
-            width: `${metrics.completedEarlyWidth}px`
-          }}
-        >
-          <div className="w-full h-full rounded border" style={{ backgroundColor: 'oklch(0.84 0 0)', borderColor: 'oklch(0.84 0 0)' }} />
-        </div>
-      )}
+      {metrics.completedEarlyWidth !== undefined &&
+        metrics.completedEarlyWidth > 0 && (
+          <>
+            <div
+              className="absolute h-4 rounded z-20 pointer-events-none"
+              style={{
+                left: `${metrics.barEndPx}px`,
+                width: `${metrics.completedEarlyWidth}px`,
+              }}
+            >
+              <div className="w-full h-full rounded border bg-gray-200 dark:bg-gray-500 border-gray-300 dark:border-gray-400" />
+            </div>
+            <div
+              className="absolute w-0.5 h-6 bg-gray-700 z-30"
+              style={{ left: `${metrics.barEndPx}px` }}
+            />
+          </>
+        )}
 
-      {metrics.overdueStartPx !== undefined && metrics.overdueWidth !== undefined && metrics.overdueWidth > 0 && (
-        <div
-          className="absolute h-4 rounded z-20 pointer-events-none"
-          style={{
-            left: `${metrics.overdueStartPx}px`,
-            width: `${metrics.overdueWidth}px`
-          }}
-        >
-          <div className="w-full h-full rounded border border-red-500 bg-[repeating-linear-gradient(45deg,rgba(255,120,120,1)_0,rgba(255,120,120,0.8)_4px,transparent_4px,transparent_8px)]" />
-        </div>
-      )}
+      {metrics.overdueStartPx !== undefined &&
+        metrics.overdueWidth !== undefined &&
+        metrics.overdueWidth > 0 && (
+          <div
+            className="absolute h-4 rounded z-20 pointer-events-none"
+            style={{
+              left: `${metrics.overdueStartPx}px`,
+              width: `${metrics.overdueWidth}px`,
+            }}
+          >
+            <div className="w-full h-full rounded border border-red-500 bg-[repeating-linear-gradient(45deg,rgba(255,120,120,1)_0,rgba(255,120,120,0.8)_4px,transparent_4px,transparent_8px)]" />
+          </div>
+        )}
 
       {metrics.delayWidth !== undefined && metrics.delayWidth > 0 && (
         <div
           className="absolute h-4 rounded z-20 pointer-events-none"
           style={{
             left: `${metrics.startPx}px`,
-            width: `${metrics.delayWidth}px`
+            width: `${metrics.delayWidth}px`,
           }}
         >
           <div className="w-full h-full rounded bg-[repeating-linear-gradient(45deg,rgba(200,200,200,1)_0,rgba(200,200,200,0.8)_4px,transparent_4px,transparent_8px)]" />
         </div>
       )}
 
-      {metrics.overdueStartPx !== undefined && metrics.plannedEndPx !== undefined && (
-        <div
-          className="absolute w-0.5 h-6 bg-red-500 z-30"
-          style={{ left: `${metrics.plannedEndPx}px` }}
-        />
-      )}
+      {metrics.overdueStartPx !== undefined &&
+        metrics.plannedEndPx !== undefined && (
+          <div
+            className="absolute w-0.5 h-6 bg-red-500 z-30"
+            style={{ left: `${metrics.plannedEndPx}px` }}
+          />
+        )}
 
       {/* Main bar button rendered last */}
       <button
@@ -72,14 +95,13 @@ export const TaskBar: React.FC<TaskBarProps> = ({ task, timelineData, granularit
         onClick={() => onSelect?.(task)}
       >
         <div
-          className={`w-full h-full rounded border ${metrics.customColors && metrics.customColors.bg ? '' : `${metrics.colors.bg} ${metrics.colors.border}`}`}
-          style={metrics.customColors && metrics.customColors.bg ? {
-            backgroundColor: metrics.customColors.bg,
-            borderColor: metrics.customColors.border,
-            opacity: 1
-          } : undefined}
+          className={`w-full h-full rounded border ${metrics.customColors ? "" : `${metrics.colors.bg} ${metrics.colors.border}`}`}
+          style={{
+            backgroundColor: metrics.customColors?.bg,
+            borderColor: metrics.customColors?.darkBorder,
+          }}
         />
       </button>
     </div>
-  )
-}
+  );
+};
