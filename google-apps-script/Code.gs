@@ -57,7 +57,7 @@ function getSheetState() {
       end: headers.find(h => /^(end|end date|fim|date fim)$/i.test(h)) || '',
       due: headers.find(h => /^(due|due date|deadline|prazo|previsto)$/i.test(h)) || ''
     },
-    popupFields: headers.filter(header => !/^(name|start|end|due|status|estado|situacao|state|prazo)$/i.test(header)).slice(0, 6),
+    popupFields: [],
     filterFields: []
   };
 

@@ -1,127 +1,129 @@
-import React, { useRef, useEffect } from 'react'
-import dayjs from 'dayjs'
-import { getTaskStatuses } from '../utils/barMetrics'
-import { parseDate } from '../utils/dateUtils'
+import React, { useRef, useEffect } from "react";
+import dayjs from "dayjs";
+import { getTaskStatuses } from "../utils/barMetrics";
+import { parseDate } from "../utils/dateUtils";
 
 interface TaskPopoverProps {
-  task: any
-  popupFields?: string[]
-  onClose: () => void
-  statusField?: string
-  statusColors?: Record<string, string>
+  task: any;
+  popupFields?: string[];
+  onClose: () => void;
+  statusField?: string;
+  statusColors?: Record<string, string>;
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  'Fazendo': 'text-yellow-600 dark:text-yellow-400',
-  'Concluído': 'text-green-600 dark:text-green-400',
-  'Atrasado': 'text-red-600 dark:text-red-400',
-  'Não iniciado': 'text-gray-500 dark:text-gray-400'
-}
+  Fazendo: "text-yellow-600 dark:text-yellow-400",
+  Concluído: "text-green-600 dark:text-green-400",
+  Atrasado: "text-red-600 dark:text-red-400",
+  "Não iniciado": "text-gray-500 dark:text-gray-400",
+};
 
 const STATUS_ICON: Record<string, string> = {
-  'Fazendo': '●',
-  'Concluído': '✓',
-  'Atrasado': '●',
-  'Não iniciado': '○'
-}
+  Fazendo: "●",
+  Concluído: "✓",
+  Atrasado: "●",
+  "Não iniciado": "○",
+};
 
 const STATUS_BORDER: Record<string, string> = {
-  'Fazendo': 'border-yellow-400 dark:border-yellow-600',
-  'Concluído': 'border-green-400 dark:border-green-600',
-  'Atrasado': 'border-red-400 dark:border-red-600',
-  'Não iniciado': 'border-gray-400 dark:border-gray-500'
-}
+  Fazendo: "border-yellow-400 dark:border-yellow-600",
+  Concluído: "border-green-400 dark:border-green-600",
+  Atrasado: "border-red-400 dark:border-red-600",
+  "Não iniciado": "border-gray-400 dark:border-gray-500",
+};
 
 const STATUS_LABEL: Record<string, string> = {
-  'Fazendo': 'Em andamento',
-  'Concluído': 'Concluído',
-  'Atrasado': 'Atrasado',
-  'Não iniciado': 'Não iniciado'
-}
+  Fazendo: "Em andamento",
+  Concluído: "Concluído",
+  Atrasado: "Atrasado",
+  "Não iniciado": "Não iniciado",
+};
 
-export const TaskPopover: React.FC<TaskPopoverProps> = ({ task, popupFields = [], onClose, statusField, statusColors = {} }) => {
-  const ref = useRef<HTMLDivElement>(null)
-  const statuses = getTaskStatuses(task, statusField)
+export const TaskPopover: React.FC<TaskPopoverProps> = ({
+  task,
+  popupFields = [],
+  onClose,
+  statusField,
+  statusColors = {},
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const statuses = getTaskStatuses(task, statusField);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
+        onClose();
       }
-    }
+    };
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleEsc)
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEsc);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEsc)
-    }
-  }, [onClose])
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [onClose]);
 
   const formatDate = (date: string | null | undefined) => {
-    if (!date) return '—'
-    const d = parseDate(date)
-    return d ? d.format('DD/MM/YYYY') : date
-  }
+    if (!date) return "—";
+    const d = parseDate(date);
+    return d ? d.format("DD/MM/YYYY") : date;
+  };
 
-  const now = dayjs().startOf('day')
-  const start = parseDate(task.start)
-  const end = parseDate(task.end)
-  const due = parseDate(task.due)
+  const now = dayjs().startOf("day");
+  const start = parseDate(task.start);
+  const end = parseDate(task.end);
+  const due = parseDate(task.due);
 
-  const detailLines: string[] = []
-  const isCustomStatus = Boolean(statusField && task[statusField])
-  
+  const detailLines: string[] = [];
+  const isCustomStatus = Boolean(statusField && task[statusField]);
+
   // Only show derived detail lines if using default statuses, not custom statuses
-  if (!isCustomStatus) {
-    if (statuses.includes('Atrasado') && due) {
-      const diff = now.diff(due, 'day')
-      detailLines.push(`Atrasado em ${diff} dia(s)`)
-      if (end && due) {
-        const endDiff = end.diff(due, 'day')
-        if (endDiff > 0) detailLines.push(`Concluído ${endDiff} dia(s) após o previsto`)
-      }
+  if ((end?.diff(due, "day") ?? 0) > 0 || now.diff(due, "day") > 0) {
+    const diff = now.diff(due, "day");
+    if (end && due) {
+      const endDiff = end.diff(due, "day");
+      if (endDiff > 0)
+        detailLines.push(`Concluído ${endDiff} dia(s) após o previsto`);
+    } else {
+      detailLines.push(`Atrasado em ${diff} dia(s)`);
     }
-    if (statuses.includes('Concluído') && end && due) {
-      const diff = end.diff(due, 'day')
-      if (diff <= 0) {
-        detailLines.push(`Concluído ${Math.abs(diff) === 0 ? 'no prazo' : `${Math.abs(diff)} dia(s) antes do previsto`}`)
-      }
-    } else if (statuses.includes('Concluído') && end && !due) {
-      detailLines.push('Concluído (sem data prevista)')
+  }
+  if (end && due) {
+    const diff = end.diff(due, "day");
+    if (diff <= 0) {
+      detailLines.push(
+        `Concluído ${Math.abs(diff) === 0 ? "no prazo" : `${Math.abs(diff)} dia(s) antes do previsto`}`,
+      );
     }
-    if (statuses.includes('Fazendo') && !statuses.includes('Atrasado') && due) {
-      const remaining = due.diff(now, 'day')
-      if (remaining < 0) {
-        detailLines.push(`Atrasado em ${Math.abs(remaining)} dia(s)`)
-      } else if (remaining === 0) {
-        detailLines.push('Vence hoje')
-      } else if (remaining <= 3) {
-        detailLines.push(`Vence em ${remaining} dia(s)`)
-      } else {
-        detailLines.push('No prazo')
-      }
-    }
-    if (statuses.includes('Não iniciado')) {
-      if (start && start.isBefore(now)) {
-        const delay = now.diff(start, 'day')
-        detailLines.push(`Atrasado para iniciar (${delay} dia(s))`)
-      } else if (start) {
-        const remaining = start.diff(now, 'day')
-        detailLines.push(`Agendado para iniciar em ${remaining} dia(s)`)
-      }
+  } else if (end && !due) {
+    detailLines.push("Concluído (sem data prevista)");
+  }
+  if (due && !end) {
+    const remaining = due.diff(now, "day");
+    if (remaining === 0) {
+      detailLines.push("Vence hoje");
+    } else if (remaining >= 1) {
+      detailLines.push(`Vence em ${remaining} dia(s)`);
+    } else {
+      detailLines.push("No prazo");
     }
   }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.15)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
+      style={{ background: "rgba(0,0,0,0.15)" }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div ref={ref} className="bg-card border border-border rounded-lg shadow-lg w-80 max-h-[80vh] overflow-y-auto">
+      <div
+        ref={ref}
+        className="bg-card border border-border rounded-lg shadow-lg w-80 max-h-[80vh] overflow-y-auto"
+      >
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <h3 className="font-bold text-base truncate pr-2">{task.name}</h3>
           <button
@@ -134,29 +136,41 @@ export const TaskPopover: React.FC<TaskPopoverProps> = ({ task, popupFields = []
 
         <div className="p-4 space-y-3">
           <div className="flex flex-wrap gap-1.5">
-            {statuses.map(s => {
-              const isCustom = isCustomStatus
-              const color = isCustom && statusColors[s]
-                ? `text-white` // When using custom colors, use white text for contrast
-                : (STATUS_COLOR[s] || 'text-slate-600 dark:text-slate-300')
-              const bgColor = isCustom && statusColors[s]
-                ? statusColors[s] // Use the hex color directly as background
-                : undefined
-              const border = isCustom && statusColors[s]
-                ? 'border-slate-300 dark:border-slate-600'
-                : (STATUS_BORDER[s] || 'border-slate-300 dark:border-slate-600')
-              const icon = isCustom ? '●' : (STATUS_ICON[s] || '●')
+            {statuses.map((s) => {
+              const isCustom = isCustomStatus;
+              const color =
+                isCustom && statusColors[s]
+                  ? `text-white` // When using custom colors, use white text for contrast
+                  : STATUS_COLOR[s] || "text-slate-600 dark:text-slate-300";
+              const bgColor =
+                isCustom && statusColors[s]
+                  ? statusColors[s] // Use the hex color directly as background
+                  : undefined;
+              const border =
+                isCustom && statusColors[s]
+                  ? "border-slate-300 dark:border-slate-600"
+                  : STATUS_BORDER[s] ||
+                    "border-slate-300 dark:border-slate-600";
+              const icon = isCustom ? "●" : STATUS_ICON[s] || "●";
 
               return (
                 <div
                   key={s}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-transparent ${border} ${color}`}
-                  style={bgColor ? { backgroundColor: bgColor, color: 'white', borderColor: bgColor } : undefined}
+                  style={
+                    bgColor
+                      ? {
+                          backgroundColor: bgColor,
+                          color: "white",
+                          borderColor: bgColor,
+                        }
+                      : undefined
+                  }
                 >
                   <span>{icon}</span>
-                  <span>{isCustom ? s : (STATUS_LABEL[s] || s)}</span>
+                  <span>{isCustom ? s : STATUS_LABEL[s] || s}</span>
                 </div>
-              )
+              );
             })}
           </div>
 
@@ -191,20 +205,23 @@ export const TaskPopover: React.FC<TaskPopoverProps> = ({ task, popupFields = []
 
           {popupFields.length > 0 && (
             <div className="border-t border-border pt-2 space-y-1.5 text-xs">
-              {popupFields.map(field => {
-                const val = task[field]
-                if (val === undefined || val === null || val === '') return null
+              {popupFields.map((field) => {
+                const val = task[field];
+                if (val === undefined || val === null || val === "")
+                  return null;
                 return (
                   <div key={field} className="flex justify-between">
                     <span className="text-muted-foreground">{field}:</span>
-                    <span className="font-medium text-right max-w-[60%] truncate">{String(val)}</span>
+                    <span className="font-medium text-right max-w-[60%] truncate">
+                      {String(val)}
+                    </span>
                   </div>
-                )
+                );
               })}
             </div>
           )}
         </div>
       </div>
     </div>
-  )
-}
+  );
+};

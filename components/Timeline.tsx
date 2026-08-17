@@ -4,6 +4,7 @@ import { Controls } from "./Controls";
 import { Legend } from "./Legend";
 import { TaskBar } from "./TaskBar";
 import { TaskPopover } from "./TaskPopover";
+import { TimelineHeader } from "./TimelineHeader";
 import {
   calculateDateRange,
   generateTimelineData,
@@ -11,7 +12,7 @@ import {
   getDaySize,
 } from "../utils/dateUtils";
 import { getTaskStatuses } from "../utils/barMetrics";
-import type { Granularity, TimelineData } from "../utils/dateUtils";
+import type { Granularity } from "../utils/dateUtils";
 
 interface TimelineProps {
   tasks: any[];
@@ -284,11 +285,10 @@ export const Timeline: React.FC<TimelineProps> = ({
                 }}
                 onMouseLeave={() => setMouseDatePx(undefined)}
               >
-                <Header
+                <TimelineHeader
                   timelineData={timelineData}
                   granularity={granularity}
                   daySize={daySize}
-                  currentDatePx={currentDatePx}
                 />
 
                 {displayedTasks.map((task, idx) => (
@@ -307,10 +307,9 @@ export const Timeline: React.FC<TimelineProps> = ({
                   </div>
                 ))}
 
-                {/* Today line */}
                 {isCurrentDateVisible && (
                   <div
-                    className="absolute w-0.5 bg-timeline-today z-20 pointer-events-none"
+                    className="absolute z-20 w-0.5 bg-timeline-today pointer-events-none"
                     style={{
                       left: `${currentDatePx}px`,
                       top: "64px",
@@ -319,10 +318,9 @@ export const Timeline: React.FC<TimelineProps> = ({
                   />
                 )}
 
-                {/* Mouse date line */}
                 {mouseDatePx !== undefined && (
                   <div
-                    className="absolute w-px bg-secondary z-20 pointer-events-none"
+                    className="absolute z-20 w-px bg-secondary pointer-events-none"
                     style={{
                       left: `${mouseDatePx}px`,
                       top: "64px",
@@ -331,11 +329,10 @@ export const Timeline: React.FC<TimelineProps> = ({
                   />
                 )}
 
-                {/* Today circle marker */}
                 {isCurrentDateVisible &&
                   (granularity === "week" || granularity === "month") && (
                     <div
-                      className="absolute w-5 h-5 bg-timeline-today rounded-full z-30 pointer-events-none text-xs flex items-center justify-center text-white font-bold"
+                      className="absolute z-30 flex h-5 w-5 items-center justify-center rounded-full bg-timeline-today text-xs font-bold text-white pointer-events-none"
                       style={{ left: `${currentDatePx - 10}px`, top: "50px" }}
                     >
                       {dayjs().date()}
@@ -364,155 +361,6 @@ export const Timeline: React.FC<TimelineProps> = ({
           statusColors={statusColors}
         />
       )}
-    </div>
-  );
-};
-
-interface HeaderProps {
-  timelineData: TimelineData;
-  granularity: Granularity;
-  daySize: number;
-  currentDatePx: number;
-}
-
-const Header: React.FC<HeaderProps> = ({
-  timelineData,
-  granularity,
-  daySize,
-  currentDatePx,
-}) => {
-  const days = timelineData.days.map((d) => ({
-    ...d,
-    displayLabel:
-      granularity === "day"
-        ? dayjs(d.date).date().toString()
-        : granularity === "week"
-          ? dayjs(d.date).format("dd")
-          : dayjs(d.date).date().toString(),
-  }));
-
-  // Build month spans
-  const months: { label: string; span: number }[] = [];
-  let currentMonth = "";
-  let currentSpan = 0;
-  days.forEach((day, i) => {
-    const mLabel = dayjs(day.date).format("MMMM YYYY");
-    if (mLabel !== currentMonth) {
-      if (currentMonth) months.push({ label: currentMonth, span: currentSpan });
-      currentMonth = mLabel;
-      currentSpan = 1;
-    } else {
-      currentSpan++;
-    }
-    if (i === days.length - 1)
-      months.push({ label: currentMonth, span: currentSpan });
-  });
-
-  // Build week spans for week granularity
-  const weeks: { label: string; span: number }[] = [];
-  if (granularity === "week") {
-    let weekStart: dayjs.Dayjs | null = null;
-    let weekDays = 0;
-    days.forEach((day, i) => {
-      const d = dayjs(day.date);
-      if (d.day() === 1 || weekStart === null) {
-        if (weekStart && weekDays > 0) {
-          const wEnd = weekStart.add(weekDays - 1, "day");
-          const fmt = wEnd.month() === weekStart.month() ? "D" : "D/M";
-          weeks.push({
-            label: `${weekStart.format(fmt)} a ${wEnd.format(fmt)}`,
-            span: weekDays,
-          });
-        }
-        weekStart = d;
-        weekDays = 1;
-      } else {
-        weekDays++;
-      }
-      if (i === days.length - 1 && weekStart) {
-        const wEnd = weekStart.add(weekDays - 1, "day");
-        const fmt = wEnd.month() === weekStart.month() ? "D" : "D/M";
-        weeks.push({
-          label: `${weekStart.format(fmt)} a ${wEnd.format(fmt)}`,
-          span: weekDays,
-        });
-      }
-    });
-  }
-
-  const todayStr = dayjs().format("YYYY-MM-DD");
-
-  return (
-    <div className="border-b border-border bg-muted/50 h-16 relative">
-      <div className="flex flex-col justify-center h-full">
-        {granularity === "month" ? (
-          <div className="flex h-full items-end pb-1">
-            {months.map((m, i) => (
-              <div
-                key={i}
-                className="text-xs font-medium text-muted-foreground text-center border-r border-border last:border-r-0 leading-3 h-full flex items-end pb-1"
-                style={{ width: `${m.span * daySize}px` }}
-              >
-                {m.label.split(" ")[0]}
-              </div>
-            ))}
-          </div>
-        ) : granularity === "week" ? (
-          <>
-            <div className="flex h-1/2 items-end pb-1">
-              {months.map((m, i) => (
-                <div
-                  key={i}
-                  className="text-xs font-medium text-muted-foreground text-center border-r border-border last:border-r-0 leading-3"
-                  style={{ width: `${m.span * daySize}px` }}
-                >
-                  {m.label}
-                </div>
-              ))}
-            </div>
-            <div className="flex h-1/2 items-start pt-1 border-t border-border">
-              {weeks.map((w, i) => (
-                <div
-                  key={i}
-                  className="text-xs font-medium text-muted-foreground text-center border-r border-border last:border-r-0 leading-3"
-                  style={{ width: `${w.span * daySize}px` }}
-                >
-                  {w.label}
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex h-1/2 items-end pb-1">
-              {months.map((m, i) => (
-                <div
-                  key={i}
-                  className="text-xs font-medium text-muted-foreground text-center border-r border-border last:border-r-0 leading-3"
-                  style={{ width: `${m.span * daySize}px` }}
-                >
-                  {m.label}
-                </div>
-              ))}
-            </div>
-            <div className="flex h-1/2 items-start pt-1 border-t border-border">
-              {days.map((day, i) => (
-                <div
-                  key={i}
-                  className={`text-xs text-center border-r border-border last:border-r-0 leading-3 ${
-                    day.date === todayStr
-                      ? "text-timeline-today font-bold bg-timeline-today/10"
-                      : "text-muted-foreground"
-                  }`}
-                  style={{ width: `${daySize}px` }}
-                >
-                  {day.displayLabel}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 };

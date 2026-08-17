@@ -55,8 +55,8 @@ export const getStatusColors = (status: string) => {
 };
 
 const STATUS_SEVERITY: Record<string, number> = {
-  Atrasado: 3,
-  Concluído: 2,
+  Concluído: 3,
+  Atrasado: 2,
   Fazendo: 1,
   "Não iniciado": 0,
 };
