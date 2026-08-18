@@ -1,19 +1,64 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import type { SpreadsheetConfig } from "../utils/sheetConfig";
+import { fetchSpreadsheetMeta } from "../utils/sheetHost";
+import { pickSpreadsheet } from "../utils/picker";
+import type { SheetSelection, TimelineTab } from "../utils/workspace";
 
 interface SettingsPanelProps {
-  config: SpreadsheetConfig;
+  tab: TimelineTab;
   fieldOptions: string[];
   metadataFields: string[];
+  allowPicker: boolean;
   onConfigChange: React.Dispatch<React.SetStateAction<SpreadsheetConfig>>;
+  onSelectionChange: (selection: SheetSelection) => void;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
-  config,
+  tab,
   fieldOptions,
   metadataFields,
+  allowPicker,
   onConfigChange,
+  onSelectionChange,
 }) => {
+  const config = tab.config;
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const { spreadsheetId } = tab;
+
+  useEffect(() => {
+    if (!spreadsheetId) {
+      setSheetNames([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchSpreadsheetMeta(spreadsheetId)
+      .then((meta) => {
+        if (!cancelled) setSheetNames(meta.sheetNames);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [spreadsheetId]);
+
+  const handlePick = async () => {
+    setError(null);
+    try {
+      const picked = await pickSpreadsheet();
+      if (picked) onSelectionChange({ ...picked, sheetName: "" });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
   const updateFieldSelection = (
     key: "name" | "start" | "end" | "due",
     value: string,
@@ -39,6 +84,61 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   return (
     <div className="space-y-4 p-4">
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Spreadsheet
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          {allowPicker ? (
+            <button
+              type="button"
+              onClick={() => void handlePick()}
+              className="cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
+            >
+              {tab.spreadsheetId ? "Change…" : "Choose…"}
+            </button>
+          ) : null}
+          <span className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+            {tab.spreadsheetName || "No spreadsheet selected"}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Sheet
+        </label>
+        <select
+          value={tab.sheetName}
+          disabled={sheetNames.length === 0}
+          onChange={(event) =>
+            onSelectionChange({
+              spreadsheetId: tab.spreadsheetId,
+              spreadsheetName: tab.spreadsheetName,
+              spreadsheetUrl: tab.spreadsheetUrl,
+              sheetName: event.target.value,
+            })
+          }
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+        >
+          <option value="">Select a sheet</option>
+          {sheetNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="space-y-2">
         <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Timeline title

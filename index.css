@@ -10,6 +10,7 @@
   --color-muted: #f0f0f0;
   --color-border: #e0e0e0;
   --color-primary: #4a90d9;
+  --color-primary-hover: #417CBB;
   --color-secondary: #6c757d;
   --color-timeline-doing: #eab308;
   --color-timeline-done: #22c55e;
@@ -25,8 +26,20 @@
   --color-muted-foreground: #999999;
   --color-muted: #333333;
   --color-border: #404040;
+  color-scheme: light dark;
 }
 
 :root {
   color: var(--color-foreground);
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
 }

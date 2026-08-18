@@ -13,6 +13,7 @@ import {
 } from "../utils/dateUtils";
 import { getTaskStatuses } from "../utils/barMetrics";
 import type { Granularity } from "../utils/dateUtils";
+import { PiCalendarDotBold } from "react-icons/pi";
 
 interface TimelineProps {
   tasks: any[];
@@ -21,6 +22,7 @@ interface TimelineProps {
   popupFields?: string[];
   sheetUrl?: string | null;
   statusField?: string;
+  generatedAt?: string;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -30,6 +32,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   popupFields = [],
   sheetUrl,
   statusField,
+  generatedAt,
 }) => {
   const [filter, setFilter] = useState("");
   const [granularity, setGranularity] = useState<Granularity>("week");
@@ -50,8 +53,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     currentDatePx <= timelineData.totalDays * timelineData.daySize;
   const daySize = getDaySize(granularity);
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const barsContainerRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
 
   // Compute filter options from tasks (excluding metadata columns that should never be filters)
   const filterOptions = useMemo(() => {
@@ -151,41 +153,26 @@ export const Timeline: React.FC<TimelineProps> = ({
         (b.start ? parseInt(b.start.replace(/\//g, "")) : 0),
     );
 
-  // Scroll sync
-  const handleBarsScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (barsContainerRef.current) {
-      const sidebar =
-        barsContainerRef.current.parentElement?.querySelector(".task-sidebar");
-      if (sidebar) sidebar.scrollTop = e.currentTarget.scrollTop;
-    }
-  };
-
-  const handleSidebarScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (barsContainerRef.current) {
-      barsContainerRef.current.scrollTop = e.currentTarget.scrollTop;
-    }
-  };
-
   // Scroll to current date on mount
   useEffect(() => {
-    if (isCurrentDateVisible && scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
+    if (isCurrentDateVisible && timelineScrollRef.current) {
+      const container = timelineScrollRef.current;
       const targetLeft = currentDatePx - container.clientWidth / 2;
       container.scrollLeft = Math.max(0, targetLeft);
     }
   }, [granularity]);
 
   const scrollToToday = () => {
-    if (scrollContainerRef.current && isCurrentDateVisible) {
-      const container = scrollContainerRef.current;
+    if (timelineScrollRef.current && isCurrentDateVisible) {
+      const container = timelineScrollRef.current;
       const targetLeft = currentDatePx - container.clientWidth / 2;
       container.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
     }
   };
 
-  const handleScroll = () => {
-    if (scrollContainerRef.current && isCurrentDateVisible) {
-      const c = scrollContainerRef.current;
+  const handleTimelineScroll = () => {
+    if (timelineScrollRef.current && isCurrentDateVisible) {
+      const c = timelineScrollRef.current;
       const scrollLeft = c.scrollLeft;
       const visLeft = currentDatePx - timelineData.daySize * 2;
       const visRight = currentDatePx + timelineData.daySize * 2;
@@ -200,8 +187,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   const rowHeight = 40;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <header className="flex-shrink-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+    <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
+      <header className="shrink-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div>
           {sheetUrl ? (
             <a
@@ -216,7 +203,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             <h1 className="text-xl font-bold">{title}</h1>
           )}
           <p className="text-xs text-muted-foreground mt-1">
-            Gerado: {new Date().toLocaleString("pt-BR")}
+            Gerado: {generatedAt}
           </p>
         </div>
       </header>
@@ -236,115 +223,113 @@ export const Timeline: React.FC<TimelineProps> = ({
         statusOptions={statusOptions}
       />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden relative">
-        {/* Sidebar */}
-        <div className="w-72 flex-shrink-0 border-r border-border flex flex-col min-h-0">
-          <div className="h-16 border-b border-border bg-muted/50 flex-shrink-0 flex items-center px-4">
-            <span className="font-semibold text-sm text-foreground">
-              Tarefas
-            </span>
+      <div
+        ref={timelineScrollRef}
+        className="relative min-h-0 flex-1 overflow-auto"
+        onScroll={handleTimelineScroll}
+      >
+        <div
+          className="flex"
+          style={{
+            width: `max(100%, ${288 + timelineData.totalDays * daySize}px)`,
+          }}
+        >
+          {/* Sidebar (frozen first column) */}
+          <div className="sticky left-0 z-30 w-72 shrink-0 border-r border-border bg-background flex flex-col">
+            <div className="sticky top-0 z-30 h-16 border-b border-border bg-muted shrink-0 flex items-center px-4">
+              <span className="font-semibold text-sm text-foreground">
+                Tarefas
+              </span>
+            </div>
+            <div className="divide-y divide-border">
+              {displayedTasks.map((task, idx) => (
+                <div
+                  key={idx}
+                  className="h-10 flex items-center px-4 text-sm hover:bg-muted/30 cursor-pointer"
+                  onClick={() => setSelectedTask(task)}
+                >
+                  <span className="truncate">{task.name}</span>
+                </div>
+              ))}
+              {displayedTasks.length === 0 && (
+                <div className="p-4 text-center text-sm text-muted-foreground italic">
+                  Nenhuma tarefa encontrada
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Timeline area (frozen header) */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto divide-y divide-border task-sidebar"
-            onScroll={handleSidebarScroll}
+            className="relative shrink-0"
+            style={{
+              width: `${timelineData.totalDays * daySize}px`,
+            }}
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setMouseDatePx(e.clientX - rect.left);
+            }}
+            onMouseLeave={() => setMouseDatePx(undefined)}
           >
+            <div className="sticky top-0 z-20 bg-muted">
+              <TimelineHeader
+                timelineData={timelineData}
+                granularity={granularity}
+                daySize={daySize}
+              />
+
+              {isCurrentDateVisible &&
+                (granularity === "week" || granularity === "month") && (
+                  <div
+                    className="absolute z-30 flex h-5 w-5 items-center justify-center rounded-full bg-timeline-today text-xs font-bold text-white pointer-events-none"
+                    style={{ left: `${currentDatePx - 10}px`, top: "50px" }}
+                  >
+                    {dayjs().date()}
+                  </div>
+                )}
+            </div>
+
             {displayedTasks.map((task, idx) => (
               <div
                 key={idx}
-                className="h-10 flex items-center px-4 text-sm hover:bg-muted/30 cursor-pointer"
-                onClick={() => setSelectedTask(task)}
+                className="h-10 relative hover:bg-muted/30 flex items-center border-b border-border"
               >
-                <span className="truncate">{task.name}</span>
+                <TaskBar
+                  task={task}
+                  timelineData={timelineData}
+                  granularity={granularity}
+                  onSelect={setSelectedTask}
+                  statusField={statusField}
+                  statusColors={statusColors}
+                />
               </div>
             ))}
-            {displayedTasks.length === 0 && (
-              <div className="p-4 text-center text-sm text-muted-foreground italic">
-                Nenhuma tarefa encontrada
-              </div>
+
+            {isCurrentDateVisible && (
+              <div
+                className="absolute z-0 w-0.5 bg-timeline-today pointer-events-none"
+                style={{
+                  left: `${currentDatePx}px`,
+                  top: "64px",
+                  height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
+                }}
+              />
+            )}
+
+            {mouseDatePx !== undefined && (
+              <div
+                className="absolute z-0 w-px bg-secondary pointer-events-none"
+                style={{
+                  left: `${mouseDatePx}px`,
+                  top: "64px",
+                  height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
+                }}
+              />
             )}
           </div>
         </div>
-
-        {/* Timeline area */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <div
-              ref={barsContainerRef}
-              className="h-full overflow-y-auto overflow-x-auto"
-              onScroll={handleBarsScroll}
-            >
-              <div
-                className="relative"
-                style={{
-                  width: `${timelineData.totalDays * daySize}px`,
-                  minWidth: "100%",
-                }}
-                onMouseMove={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setMouseDatePx(e.clientX - rect.left);
-                }}
-                onMouseLeave={() => setMouseDatePx(undefined)}
-              >
-                <TimelineHeader
-                  timelineData={timelineData}
-                  granularity={granularity}
-                  daySize={daySize}
-                />
-
-                {displayedTasks.map((task, idx) => (
-                  <div
-                    key={idx}
-                    className="h-10 relative hover:bg-muted/30 flex items-center border-b border-border"
-                  >
-                    <TaskBar
-                      task={task}
-                      timelineData={timelineData}
-                      granularity={granularity}
-                      onSelect={setSelectedTask}
-                      statusField={statusField}
-                      statusColors={statusColors}
-                    />
-                  </div>
-                ))}
-
-                {isCurrentDateVisible && (
-                  <div
-                    className="absolute z-20 w-0.5 bg-timeline-today pointer-events-none"
-                    style={{
-                      left: `${currentDatePx}px`,
-                      top: "64px",
-                      height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
-                    }}
-                  />
-                )}
-
-                {mouseDatePx !== undefined && (
-                  <div
-                    className="absolute z-20 w-px bg-secondary pointer-events-none"
-                    style={{
-                      left: `${mouseDatePx}px`,
-                      top: "64px",
-                      height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
-                    }}
-                  />
-                )}
-
-                {isCurrentDateVisible &&
-                  (granularity === "week" || granularity === "month") && (
-                    <div
-                      className="absolute z-30 flex h-5 w-5 items-center justify-center rounded-full bg-timeline-today text-xs font-bold text-white pointer-events-none"
-                      style={{ left: `${currentDatePx - 10}px`, top: "50px" }}
-                    >
-                      {dayjs().date()}
-                    </div>
-                  )}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
-
-      <div className="flex-shrink-0">
+      <div className="sticky bottom-0 z-40 bg-muted">
         <Legend
           statusOptions={statusOptions}
           statusColors={statusColors}

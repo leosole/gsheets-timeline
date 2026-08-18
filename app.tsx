@@ -1,106 +1,33 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { AppHeader } from "./components/AppHeader";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { Timeline } from "./components/Timeline";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { TabBar } from "./components/TabBar";
+import { TimelineTabView } from "./components/TimelineTabView";
 import {
-  buildFieldOptions,
-  resolveTimelineLayout,
-  sanitizeSpreadsheetData,
-  type SpreadsheetConfig,
-} from "./utils/sheetConfig";
-import {
-  getSheetPayload,
-  getSheetRows,
-  getWindowConfig,
-  getWindowData,
-  getWindowHeaders,
+  fetchWorkspace,
+  getBootstrap,
+  persistWorkspace,
 } from "./utils/sheetHost";
+import {
+  addTab,
+  closeTab,
+  createTab,
+  createWorkspace,
+  getActiveTab,
+  parseWorkspace,
+  renameTab,
+  setActiveTab,
+  updateTab,
+  type TimelineTab,
+  type WorkspaceState,
+} from "./utils/workspace";
 
-type TabName = "timeline" | "settings";
+const SAVE_DEBOUNCE_MS = 800;
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabName>(() =>
-    resolveTimelineLayout((window as any).__TIMELINE_MODE__) === "timeline"
-      ? "timeline"
-      : "settings",
-  );
-  const [config, setConfig] = useState<SpreadsheetConfig>(() =>
-    getWindowConfig(),
-  );
-  const [rows, setRows] = useState<any[]>(() => getWindowData());
-  const [headers, setHeaders] = useState<string[]>(() => getWindowHeaders());
+  const bootstrap = useRef(getBootstrap()).current;
+  const isAddon = bootstrap.mode === "addon";
 
-  function update() {
-    getSheetRows().then((latestRows) => {
-      setRows(latestRows);
-      window.__TIMELINE_DATA__ = latestRows;
-    });
-  }
-  useEffect(() => {
-    const hasInjectedState =
-      Array.isArray(window.__TIMELINE_DATA__) || !!window.__TIMELINE_CONFIG__;
-
-    const appsScriptGoogle = (globalThis as any).google;
-
-    if (
-      !hasInjectedState &&
-      appsScriptGoogle &&
-      appsScriptGoogle.script &&
-      appsScriptGoogle.script.run
-    ) {
-      getSheetPayload().then(({ rows, headers, config }) => {
-        setRows(rows);
-        setHeaders(headers);
-        setConfig(config);
-      });
-      return;
-    }
-
-    setRows(getWindowData());
-    setHeaders(getWindowHeaders());
-    setConfig(getWindowConfig());
-  }, []);
-
-  useEffect(() => {
-    window.__TIMELINE_CONFIG__ = config;
-  }, [config]);
-
-  useEffect(() => {
-    window.__TIMELINE_HEADERS__ = headers;
-  }, [headers]);
-
-  useEffect(() => {
-    const mode = resolveTimelineLayout((window as any).__TIMELINE_MODE__);
-    if (mode === "timeline") {
-      setActiveTab("timeline");
-      return;
-    }
-    setActiveTab("settings");
-  }, []);
-
-  const fieldOptions = useMemo(
-    () => buildFieldOptions(rows, headers),
-    [rows, headers],
-  );
-
-  const metadataFields = useMemo(() => {
-    const coreFields = new Set<string>(
-      [
-        config.fieldMap.name,
-        config.fieldMap.start,
-        config.fieldMap.end,
-        config.fieldMap.due,
-        config.statusField || "",
-      ].filter(Boolean),
-    );
-
-    return fieldOptions.filter((option) => !coreFields.has(option));
-  }, [fieldOptions, config.fieldMap, config.statusField]);
-
-  const tasks = useMemo(
-    () => sanitizeSpreadsheetData(rows, config.fieldMap),
-    [rows, config.fieldMap],
-  );
+  const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [dark, setDark] = useState(() => {
     if (typeof localStorage !== "undefined") {
@@ -118,54 +45,93 @@ export const App: React.FC = () => {
     localStorage.setItem("timeline-dark", String(dark));
   }, [dark]);
 
-  const toggleDark = () => setDark((d) => !d);
+  useEffect(() => {
+    if (isAddon && bootstrap.bound) {
+      setWorkspace(
+        createWorkspace([
+          createTab({
+            ...bootstrap.bound,
+            label: bootstrap.bound.spreadsheetName,
+          }),
+        ]),
+      );
+      return;
+    }
+
+    fetchWorkspace()
+      .then((json) => setWorkspace(parseWorkspace(json)))
+      .catch((cause: unknown) => {
+        setLoadError(cause instanceof Error ? cause.message : String(cause));
+        setWorkspace(createWorkspace());
+      });
+  }, [isAddon, bootstrap.bound]);
+
+  // The addon is bound to one spreadsheet, so its state is never persisted.
+  useEffect(() => {
+    if (!workspace || isAddon) return;
+
+    const timer = setTimeout(() => {
+      persistWorkspace(JSON.stringify(workspace)).catch((cause: unknown) => {
+        setLoadError(cause instanceof Error ? cause.message : String(cause));
+      });
+    }, SAVE_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [workspace, isAddon]);
+
+  const handleTabChange = useCallback(
+    (tabId: string) => (updater: (tab: TimelineTab) => TimelineTab) => {
+      setWorkspace((current) =>
+        current ? updateTab(current, tabId, updater) : current,
+      );
+    },
+    [],
+  );
+
+  if (!workspace) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading timelines…
+      </div>
+    );
+  }
+
+  const activeTab = getActiveTab(workspace);
 
   return (
-    <div
-      className="h-full min-h-0 bg-background text-foreground"
-      style={{ resize: "both", overflow: "auto" }}
-    >
-      <AppHeader
-        activeTab={activeTab}
-        dark={dark}
-        onTabChange={setActiveTab}
-        onDarkModeToggle={toggleDark}
-        onSync={update}
-      />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+      {loadError ? (
+        <div
+          role="alert"
+          className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+        >
+          {loadError}
+        </div>
+      ) : null}
 
-      {activeTab === "timeline" ? (
-        <>
-          {tasks.length > 0 ? (
-            <Timeline
-              tasks={tasks}
-              title={config.title}
-              filterFields={config.filterFields}
-              popupFields={config.popupFields}
-              sheetUrl={config.sheetUrl}
-              statusField={config.statusField}
-            />
-          ) : (
-            <div className="flex min-h-[60vh] items-center justify-center p-8 text-center">
-              <div className="max-w-md rounded-lg border border-dashed border-border bg-card p-6">
-                <h2 className="text-lg font-semibold">
-                  No spreadsheet rows loaded
-                </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Open the Configuration tab, map the date columns, and click
-                  Update to sync the spreadsheet data.
-                </p>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <SettingsPanel
-          config={config}
-          fieldOptions={fieldOptions}
-          metadataFields={metadataFields}
-          onConfigChange={setConfig}
+      {isAddon ? null : (
+        <TabBar
+          tabs={workspace.tabs}
+          activeTabId={activeTab.id}
+          onSelect={(tabId) =>
+            setWorkspace((c) => (c ? setActiveTab(c, tabId) : c))
+          }
+          onClose={(tabId) => setWorkspace((c) => (c ? closeTab(c, tabId) : c))}
+          onRename={(tabId, label) =>
+            setWorkspace((c) => (c ? renameTab(c, tabId, label) : c))
+          }
+          onCreate={() => setWorkspace((c) => (c ? addTab(c) : c))}
         />
       )}
+
+      <TimelineTabView
+        key={activeTab.id}
+        tab={activeTab}
+        dark={dark}
+        allowPicker={!isAddon}
+        onDarkModeToggle={() => setDark((value) => !value)}
+        onTabChange={handleTabChange(activeTab.id)}
+      />
     </div>
   );
 };
