@@ -112,7 +112,9 @@ export const readCachedSheetRows = (
   if (!spreadsheetId || !canUseLocalStorage()) return null;
 
   try {
-    const value = localStorage.getItem(getRowCacheKey(spreadsheetId, sheetName));
+    const value = localStorage.getItem(
+      getRowCacheKey(spreadsheetId, sheetName),
+    );
     if (!value) return null;
 
     const parsed = JSON.parse(value) as Partial<CachedSheetRows>;
@@ -154,7 +156,10 @@ export const writeCachedSheetRows = (
   try {
     localStorage.setItem(key, value);
 
-    const nextIndex = [key, ...readRowCacheIndex().filter((item) => item !== key)];
+    const nextIndex = [
+      key,
+      ...readRowCacheIndex().filter((item) => item !== key),
+    ];
     nextIndex.slice(MAX_ROW_CACHE_ENTRIES).forEach((oldKey) => {
       localStorage.removeItem(oldKey);
     });

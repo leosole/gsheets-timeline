@@ -21,9 +21,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onConfigChange,
   onSelectionChange,
 }) => {
-  const [draftConfig, setDraftConfig] = useState<SpreadsheetConfig>(
-    tab.config,
-  );
+  const [draftConfig, setDraftConfig] = useState<SpreadsheetConfig>(tab.config);
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +146,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
       {hasUnsavedChanges ? (
         <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground">
-          You have unsaved configuration changes. Save to apply them to the timeline.
+          You have unsaved configuration changes. Save to apply them to the
+          timeline.
         </div>
       ) : null}
 
@@ -234,7 +233,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="">None</option>
-          {fieldOptionsLoading ? <option value="">Loading columns...</option> : null}
+          {fieldOptionsLoading ? (
+            <option value="">Loading columns...</option>
+          ) : null}
           {fieldOptions.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -265,7 +266,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Select a column</option>
-              {fieldOptionsLoading ? <option value="">Loading columns...</option> : null}
+              {fieldOptionsLoading ? (
+                <option value="">Loading columns...</option>
+              ) : null}
               {fieldOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}

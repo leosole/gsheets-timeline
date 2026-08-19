@@ -154,9 +154,10 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
 
         setRows(state.rows);
         setHeaders(state.headers);
-        loadedKeyRef.current = state.rows.length > 0
-          ? `${state.meta.spreadsheetId}::${state.meta.sheetName}`
-          : "";
+        loadedKeyRef.current =
+          state.rows.length > 0
+            ? `${state.meta.spreadsheetId}::${state.meta.sheetName}`
+            : "";
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
@@ -185,12 +186,15 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     }
 
     if (!configured || (viewMode === "settings" && headers.length === 0)) {
-      void loadSheetState({
-        spreadsheetId,
-        spreadsheetName,
-        spreadsheetUrl,
-        sheetName,
-      }, !configured);
+      void loadSheetState(
+        {
+          spreadsheetId,
+          spreadsheetName,
+          spreadsheetUrl,
+          sheetName,
+        },
+        !configured,
+      );
       return;
     }
 

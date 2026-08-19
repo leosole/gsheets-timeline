@@ -228,38 +228,36 @@ export const Timeline: React.FC<TimelineProps> = ({
     effectiveCollapsedParents.delete(row);
   });
 
-  const displayedTasks =
-    hasGroupedRows
-      ? tasks.filter((task) => {
-          const rowParent =
-            typeof task.__groupParentRow === "number"
-              ? task.__groupParentRow
-              : -1;
+  const displayedTasks = hasGroupedRows
+    ? tasks.filter((task) => {
+        const rowParent =
+          typeof task.__groupParentRow === "number"
+            ? task.__groupParentRow
+            : -1;
 
-          if (rowParent >= 0) {
-            if (effectiveCollapsedParents.has(rowParent)) return false;
-            return taskMatchesFilters(task);
-          }
+        if (rowParent >= 0) {
+          if (effectiveCollapsedParents.has(rowParent)) return false;
+          return taskMatchesFilters(task);
+        }
 
-          const rowNumber =
-            typeof task.__sheetRow === "number" ? task.__sheetRow : -1;
-          const hasChildren =
-            rowNumber >= 0 && groupedParentRows.has(rowNumber);
+        const rowNumber =
+          typeof task.__sheetRow === "number" ? task.__sheetRow : -1;
+        const hasChildren = rowNumber >= 0 && groupedParentRows.has(rowNumber);
 
-          if (!hasChildren) {
-            return taskMatchesFilters(task);
-          }
+        if (!hasChildren) {
+          return taskMatchesFilters(task);
+        }
 
-          if (taskMatchesFilters(task)) return true;
-          return rowNumber >= 0 && matchingChildParentRows.has(rowNumber);
-        })
-      : tasks
-          .filter(taskMatchesFilters)
-          .sort(
-            (a, b) =>
-              (a.start ? parseInt(a.start.replace(/\//g, "")) : 0) -
-              (b.start ? parseInt(b.start.replace(/\//g, "")) : 0),
-          );
+        if (taskMatchesFilters(task)) return true;
+        return rowNumber >= 0 && matchingChildParentRows.has(rowNumber);
+      })
+    : tasks
+        .filter(taskMatchesFilters)
+        .sort(
+          (a, b) =>
+            (a.start ? parseInt(a.start.replace(/\//g, "")) : 0) -
+            (b.start ? parseInt(b.start.replace(/\//g, "")) : 0),
+        );
 
   // Scroll to current date on mount
   useEffect(() => {
@@ -361,7 +359,9 @@ export const Timeline: React.FC<TimelineProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCollapsedParents(new Set(groupedParentRows))}
+                    onClick={() =>
+                      setCollapsedParents(new Set(groupedParentRows))
+                    }
                     className="cursor-pointer rounded-lg p-2 text-muted-foreground hover:bg-muted"
                     title="Collapse all"
                     aria-label="Collapse all"
