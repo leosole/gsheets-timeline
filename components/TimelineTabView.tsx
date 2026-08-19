@@ -82,6 +82,7 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
   );
   const [showingCachedRows, setShowingCachedRows] = useState(false);
   const [groupingRows, setGroupingRows] = useState(false);
+  const [rowsVersion, setRowsVersion] = useState(0);
   const loadedKeyRef = useRef("");
   const groupedKeyRef = useRef("");
 
@@ -113,6 +114,7 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
       setGeneratedAt(new Date().toLocaleString("pt-BR"));
       setShowingCachedRows(false);
       groupedKeyRef.current = "";
+      setRowsVersion((version) => version + 1);
       writeCachedSheetRows(spreadsheetId, sheetName, payload);
       if (payload.rows.length === 0) groupedKeyRef.current = cacheKey;
     } catch (cause) {
@@ -218,7 +220,7 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
   useEffect(() => {
     if (!spreadsheetId || viewMode !== "timeline" || rows.length === 0) return;
 
-    const key = `${spreadsheetId}::${sheetName}`;
+    const key = `${spreadsheetId}::${sheetName}::${rowsVersion}`;
     if (groupedKeyRef.current === key) return;
     groupedKeyRef.current = key;
 
@@ -236,7 +238,7 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [spreadsheetId, sheetName, viewMode, rows.length]);
+  }, [spreadsheetId, sheetName, viewMode, rows.length, rowsVersion]);
 
   const handleViewModeChange = useCallback(
     (activePanel: ViewMode) => {

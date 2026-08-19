@@ -105,6 +105,17 @@ function readSheetHeadersFast_(sheet) {
   return readHeaders_(sampled, headerRowIndex);
 }
 
+/** Header row index without reading the full sheet; samples only the first rows. */
+function findHeaderRowIndexFast_(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  const lastRow = sheet.getLastRow();
+  if (lastColumn <= 0 || lastRow <= 0) return -1;
+
+  const scanRows = Math.min(lastRow, 50);
+  const sampled = sheet.getRange(1, 1, scanRows, lastColumn).getValues();
+  return findHeaderRowIndex_(sampled);
+}
+
 function buildRowGroupMetaFromSheetsApi_(spreadsheetId, sheet, dataStartRow, dataEndRow) {
   if (typeof Sheets === 'undefined' || !Sheets.Spreadsheets) return null;
 
@@ -334,20 +345,19 @@ function getSheetRows(spreadsheetId, sheetName) {
 function getSheetRowGroups(spreadsheetId, sheetName) {
   const spreadsheet = openSpreadsheet_(spreadsheetId);
   const sheet = resolveSheet_(spreadsheet, sheetName);
-  const dataRange = sheet.getDataRange();
-  const values = dataRange.getValues();
+  const dataEndRow = sheet.getLastRow();
 
-  if (!values.length) {
+  if (dataEndRow <= 0) {
     return JSON.stringify({ rowMeta: {} });
   }
 
-  const headerRowIndex = findHeaderRowIndex_(values);
+  // Only the header row's position is needed here, not the sheet's cell values.
+  const headerRowIndex = findHeaderRowIndexFast_(sheet);
   if (headerRowIndex < 0) {
     return JSON.stringify({ rowMeta: {} });
   }
 
-  const firstDataRow = dataRange.getRow() + headerRowIndex + 1;
-  const dataEndRow = dataRange.getRow() + values.length - 1;
+  const firstDataRow = headerRowIndex + 2;
   return JSON.stringify({
     rowMeta: buildRowGroupMeta_(spreadsheetId, sheet, firstDataRow, dataEndRow)
   });
