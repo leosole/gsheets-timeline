@@ -75,16 +75,194 @@ function resolveSheet_(spreadsheet, sheetName) {
   return spreadsheet.getSheets()[0];
 }
 
-function readHeaders_(values) {
-  return values[0].map(value => String(value == null ? '' : value).trim()).filter(Boolean);
+function findHeaderRowIndex_(values) {
+  for (let index = 0; index < values.length; index += 1) {
+    const hasAnyValue = values[index].some(value => String(value == null ? '' : value).trim());
+    if (hasAnyValue) return index;
+  }
+
+  return -1;
 }
 
-function readRows_(values, headers) {
-  return values.slice(1).map(row => {
+function readHeaders_(values, headerRowIndex) {
+  if (headerRowIndex < 0 || headerRowIndex >= values.length) return [];
+  return values[headerRowIndex].map(value => String(value == null ? '' : value).trim()).filter(Boolean);
+}
+
+function readSheetHeadersFast_(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  const lastRow = sheet.getLastRow();
+
+  if (lastColumn <= 0 || lastRow <= 0) {
+    return [];
+  }
+
+  const scanRows = Math.min(lastRow, 50);
+  const sampled = sheet.getRange(1, 1, scanRows, lastColumn).getValues();
+  const headerRowIndex = findHeaderRowIndex_(sampled);
+  if (headerRowIndex < 0) return [];
+
+  return readHeaders_(sampled, headerRowIndex);
+}
+
+function buildRowGroupMetaFromSheetsApi_(spreadsheetId, sheet, dataStartRow, dataEndRow) {
+  if (typeof Sheets === 'undefined' || !Sheets.Spreadsheets) return null;
+
+  try {
+    const sheetId = sheet.getSheetId();
+    const response = Sheets.Spreadsheets.get(spreadsheetId, {
+      ranges: [sheet.getName()],
+      fields: 'sheets(properties(sheetId),rowGroups(range(startIndex,endIndex),depth))'
+    });
+    const apiSheet = (response.sheets || []).find(item => item.properties && item.properties.sheetId === sheetId);
+    const rowGroups = (apiSheet && apiSheet.rowGroups ? apiSheet.rowGroups : [])
+      .filter(group => Number(group.depth || 0) <= 1);
+
+    const rowMeta = {};
+    rowGroups.forEach(group => {
+      const range = group.range || {};
+      if (typeof range.startIndex !== 'number' || typeof range.endIndex !== 'number') return;
+
+      const firstChildRow = Math.max(range.startIndex + 1, dataStartRow);
+      const lastChildRow = Math.min(range.endIndex, dataEndRow);
+      if (lastChildRow < firstChildRow) return;
+
+      let parentRow = firstChildRow - 1;
+      if (parentRow < dataStartRow) parentRow = firstChildRow;
+
+      if (!rowMeta[parentRow]) rowMeta[parentRow] = {};
+      rowMeta[parentRow].__sheetRow = parentRow;
+      rowMeta[parentRow].__isGroupParent = true;
+      rowMeta[parentRow].__groupCollapsed = false;
+      rowMeta[parentRow].__groupChildCount = Number(rowMeta[parentRow].__groupChildCount || 0);
+
+      for (let rowNum = firstChildRow; rowNum <= lastChildRow; rowNum += 1) {
+        if (rowNum === parentRow) continue;
+
+        if (!rowMeta[rowNum]) rowMeta[rowNum] = {};
+        rowMeta[rowNum].__sheetRow = rowNum;
+        rowMeta[rowNum].__groupParentRow = parentRow;
+        rowMeta[parentRow].__groupChildCount += 1;
+      }
+    });
+
+    return rowMeta;
+  } catch (error) {
+    console.warn('Sheets API row group metadata unavailable; falling back to Spreadsheet service.', error);
+    return null;
+  }
+}
+
+function buildRowGroupMeta_(spreadsheetId, sheet, dataStartRow, dataEndRow) {
+  const rowMeta = {};
+  if (dataEndRow < dataStartRow) return rowMeta;
+
+  const apiRowMeta = buildRowGroupMetaFromSheetsApi_(spreadsheetId, sheet, dataStartRow, dataEndRow);
+  if (apiRowMeta !== null) return apiRowMeta;
+
+  let rowGroups = [];
+
+  if (typeof sheet.getRowGroups === 'function') {
+    rowGroups = sheet.getRowGroups() || [];
+  } else if (
+    typeof sheet.getRowGroupDepth === 'function' &&
+    typeof sheet.getRowGroup === 'function'
+  ) {
+    const seen = {};
+    let previousDepth = 0;
+
+    for (let rowNum = dataStartRow; rowNum <= dataEndRow; rowNum += 1) {
+      const depth = Number(sheet.getRowGroupDepth(rowNum) || 0);
+      if (depth > previousDepth && depth >= 1) {
+        let group = null;
+        try {
+          group = sheet.getRowGroup(rowNum, 1);
+        } catch (error) {
+          group = null;
+        }
+
+        if (group && typeof group.getRange === 'function') {
+          const range = group.getRange();
+          const key = range.getRow() + ':' + range.getNumRows();
+          if (!seen[key]) {
+            seen[key] = true;
+            rowGroups.push(group);
+          }
+        }
+      }
+      previousDepth = depth;
+    }
+  } else if (typeof sheet.getRowGroup === 'function') {
+    // Fallback for Sheet APIs that expose row groups by row/depth instead of bulk retrieval.
+    const seen = {};
+    for (let rowNum = dataStartRow; rowNum <= dataEndRow; rowNum += 1) {
+      let group = null;
+      try {
+        group = sheet.getRowGroup(rowNum, 1);
+      } catch (error) {
+        // No group exists for this row/depth; continue scanning remaining rows.
+        group = null;
+      }
+      if (!group || typeof group.getRange !== 'function') continue;
+
+      const range = group.getRange();
+      const key = range.getRow() + ':' + range.getNumRows();
+      if (seen[key]) continue;
+
+      seen[key] = true;
+      rowGroups.push(group);
+    }
+  }
+
+  if (!rowGroups.length) return rowMeta;
+
+  rowGroups.forEach(group => {
+    if (typeof group.getDepth === 'function' && group.getDepth() > 1) {
+      return;
+    }
+
+    const range = group.getRange();
+    const groupStart = range.getRow();
+    const groupEnd = groupStart + range.getNumRows() - 1;
+    const firstChildRow = Math.max(groupStart, dataStartRow);
+    const lastChildRow = Math.min(groupEnd, dataEndRow);
+
+    if (lastChildRow < firstChildRow) return;
+
+    let parentRow = firstChildRow - 1;
+    if (parentRow < dataStartRow) {
+      // Edge case: if group starts on the first data row, fallback parent is the first grouped row.
+      parentRow = firstChildRow;
+    }
+
+    if (!rowMeta[parentRow]) rowMeta[parentRow] = {};
+    rowMeta[parentRow].__sheetRow = parentRow;
+    rowMeta[parentRow].__isGroupParent = true;
+    rowMeta[parentRow].__groupCollapsed = false;
+    rowMeta[parentRow].__groupChildCount = (rowMeta[parentRow].__groupChildCount || 0);
+
+    for (let rowNum = firstChildRow; rowNum <= lastChildRow; rowNum += 1) {
+      if (rowNum === parentRow) continue;
+
+      if (!rowMeta[rowNum]) rowMeta[rowNum] = {};
+      rowMeta[rowNum].__sheetRow = rowNum;
+      rowMeta[rowNum].__groupParentRow = parentRow;
+      rowMeta[parentRow].__groupChildCount += 1;
+    }
+  });
+
+  return rowMeta;
+}
+
+function readRowsWithoutGroupMeta_(values, headers, firstDataRow, headerRowIndex) {
+  return values.slice(headerRowIndex + 1).map((row, rowIndex) => {
+    const sheetRow = firstDataRow + rowIndex;
     const rowObject = {};
     headers.forEach((header, index) => {
       rowObject[header] = row[index] !== undefined ? row[index] : '';
     });
+
+    rowObject.__sheetRow = sheetRow;
     return rowObject;
   });
 }
@@ -104,7 +282,6 @@ function getSpreadsheetMeta(spreadsheetId) {
 function getSheetState(spreadsheetId, sheetName) {
   const spreadsheet = openSpreadsheet_(spreadsheetId);
   const sheet = resolveSheet_(spreadsheet, sheetName);
-  const values = sheet.getDataRange().getValues();
 
   const meta = {
     spreadsheetId: spreadsheet.getId(),
@@ -113,23 +290,8 @@ function getSheetState(spreadsheetId, sheetName) {
     sheetName: sheet.getName()
   };
 
-  if (!values.length) {
-    return JSON.stringify({
-      rows: [],
-      headers: [],
-      meta: meta,
-      config: {
-        title: sheet.getName(),
-        statusField: '',
-        fieldMap: { name: '', start: '', end: '', due: '' },
-        popupFields: [],
-        filterFields: []
-      }
-    });
-  }
-
-  const headers = readHeaders_(values);
-  const rows = readRows_(values, headers);
+  const headers = readSheetHeadersFast_(sheet);
+  const rows = [];
 
   const config = {
     title: sheet.getName(),
@@ -149,14 +311,46 @@ function getSheetState(spreadsheetId, sheetName) {
 
 function getSheetRows(spreadsheetId, sheetName) {
   const spreadsheet = openSpreadsheet_(spreadsheetId);
-  const values = resolveSheet_(spreadsheet, sheetName).getDataRange().getValues();
+  const sheet = resolveSheet_(spreadsheet, sheetName);
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
 
   if (!values.length) {
     return JSON.stringify({ rows: [], headers: [] });
   }
 
-  const headers = readHeaders_(values);
-  return JSON.stringify({ rows: readRows_(values, headers), headers: headers });
+  const headerRowIndex = findHeaderRowIndex_(values);
+  if (headerRowIndex < 0) {
+    return JSON.stringify({ rows: [], headers: [] });
+  }
+  const headers = readHeaders_(values, headerRowIndex);
+  const firstDataRow = dataRange.getRow() + headerRowIndex + 1;
+  return JSON.stringify({
+    rows: readRowsWithoutGroupMeta_(values, headers, firstDataRow, headerRowIndex),
+    headers: headers
+  });
+}
+
+function getSheetRowGroups(spreadsheetId, sheetName) {
+  const spreadsheet = openSpreadsheet_(spreadsheetId);
+  const sheet = resolveSheet_(spreadsheet, sheetName);
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+
+  if (!values.length) {
+    return JSON.stringify({ rowMeta: {} });
+  }
+
+  const headerRowIndex = findHeaderRowIndex_(values);
+  if (headerRowIndex < 0) {
+    return JSON.stringify({ rowMeta: {} });
+  }
+
+  const firstDataRow = dataRange.getRow() + headerRowIndex + 1;
+  const dataEndRow = dataRange.getRow() + values.length - 1;
+  return JSON.stringify({
+    rowMeta: buildRowGroupMeta_(spreadsheetId, sheet, firstDataRow, dataEndRow)
+  });
 }
 
 function getWorkspace() {

@@ -8,7 +8,13 @@ export type TimelineFieldMap = {
 export type TimelineRow = Record<
   string,
   string | number | boolean | null | undefined
->;
+> & {
+  __sheetRow?: number;
+  __groupParentRow?: number;
+  __isGroupParent?: boolean;
+  __groupCollapsed?: boolean;
+  __groupChildCount?: number;
+};
 
 export interface SpreadsheetConfig {
   title: string;
@@ -59,6 +65,7 @@ export const buildFieldOptions = (
 
   rows.forEach((row) => {
     Object.keys(row || {}).forEach((key) => {
+      if (key.startsWith("__")) return;
       if (typeof key === "string" && key.trim()) {
         options.add(key.trim());
       }

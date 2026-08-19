@@ -1,0 +1,67 @@
+# Project Instructions
+
+## Project
+
+`gsheets-timeline` is a React 18 + TypeScript single-page timeline for Google Sheets data. Vite bundles the client into one HTML file for Google Apps Script. The repository supports two hosts:
+
+- **Web app**: multi-tab workspace; users pick spreadsheets through Google Picker.
+- **Sheets addon**: modeless dialog bound to the active spreadsheet; no picker or tab bar.
+
+The timeline is read-only. Do not add spreadsheet row writes unless the feature explicitly changes that product contract.
+
+## Stack and Commands
+
+- Use TypeScript and React for client changes. Use the existing Tailwind CSS v4 setup and `react-icons` where an icon is needed.
+- Install dependencies with `npm install`.
+- Run local development with `npm run dev`.
+- Run unit tests with `npm test` (`vitest run`).
+- Build and typecheck with `npm run build`.
+- Generate the Apps Script HTML artifact with `npm run create`; this runs the build and copies `dist/index.html` to `google-apps-script/Sidebar.html`.
+- Push the generated Apps Script project with `npm run update` (`clasp push --force`). Deploy with `npm run deploy` only when deployment is requested.
+- Use `npm run preview` to inspect a production build.
+
+After changing behavior, run the narrowest relevant test first, then `npm test` or `npm run build` as appropriate. For changes that affect the Apps Script bundle, run `npm run create` and verify the generated artifact is intentional.
+
+## Source Layout
+
+- `app.tsx`: top-level workspace loading, persistence, tab actions, and host-mode branching.
+- `components/`: UI and timeline views. Keep state ownership near the feature that owns it; pass changes upward through existing callbacks.
+- `utils/sheetHost.ts`: the only client boundary for Apps Script calls and local development fallbacks. Add new server calls here rather than calling `google.script.run` from components.
+- `utils/workspace.ts`: workspace/tab models, defaults, parsing, normalization, and immutable state transitions. Preserve the invariant that a workspace always has at least one tab.
+- `utils/sheetConfig.ts`: spreadsheet column mapping, status configuration, and row sanitization.
+- `utils/dateUtils.ts`, `utils/barMetrics.ts`, and `utils/statusUtils.ts`: date parsing, timeline calculations, and status/color behavior.
+- `google-apps-script/Code.gs`: Apps Script entry points and server functions. Return JSON strings for client calls to match the existing `callServer` behavior.
+- `scripts/prepare-sidebar.js`: copies the Vite single-file build into `google-apps-script/Sidebar.html`. Treat `Sidebar.html` as generated output.
+
+## Implementation Rules
+
+- Preserve the separation between web app and addon behavior. Use `getBootstrap()` and the existing `isAddon`/`allowPicker` flow instead of detecting hosts in individual components.
+- Keep workspace updates immutable and use the helpers in `workspace.ts` (`addTab`, `updateTab`, `setActiveTab`, etc.). Do not mutate tabs or arrays in place.
+- Treat persisted workspace data as untrusted. Update `normalizeWorkspace` and related normalization logic when adding persisted fields, and bump `WORKSPACE_VERSION` only when a deliberate migration/version change is needed.
+- Keep spreadsheet row data transient. Persist only tab metadata and column configuration unless the product requirement explicitly says otherwise.
+- Keep local development usable outside Apps Script. New host calls need a deterministic local fallback, normally using `window.__TIMELINE_DATA__`, `window.__TIMELINE_HEADERS__`, or `localStorage` as appropriate.
+- Validate spreadsheet identifiers and payload sizes on the Apps Script server. Keep credentials in Script Properties or local environment configuration; never commit API keys, OAuth tokens, or other secrets.
+- Preserve existing date formats and dayjs-based parsing unless a feature requires a format change. Be explicit about empty or invalid dates.
+- Prefer small, behavior-focused utilities and tests over broad component rewrites. Avoid unrelated formatting changes.
+- Use ASCII in source and documentation unless existing content requires another character set. Do not add comments unless they explain non-obvious behavior.
+
+## Testing
+
+- Unit tests live beside the utility modules under `utils/` and use Vitest with the Node environment.
+- Test public utility behavior and edge cases: malformed persisted state, missing headers/data, empty tabs, invalid dates, and host fallbacks.
+- For UI changes, verify both web-app and addon conditions when the feature touches host-specific controls. At minimum, ensure the app still builds and the relevant state transition is covered.
+
+## Apps Script and Generated Files
+
+- `google-apps-script/appsscript.json` controls Apps Script runtime, OAuth scopes, and web-app settings. Avoid changing scopes unless required and explain the security impact.
+- `Code.gs` uses `onOpen`, `showTimelineDialog`, and `doGet` as entry points. Keep bootstrap injection compatible with `window.__TIMELINE_BOOTSTRAP__`.
+- `Sidebar.html` is generated by `npm run create`; edit the React/Vite sources instead of hand-editing it. Do not manually commit unrelated generated churn.
+- Web-app Picker configuration comes from Script Properties named `PICKER_API_KEY` and `CLOUD_PROJECT_NUMBER`; do not place these values in source control.
+
+## Delivery Checklist
+
+1. Make the smallest change in the owning source module.
+2. Add or update a focused Vitest test for changed utility behavior.
+3. Run the relevant test and `npm run build`.
+4. If the bundle or Apps Script behavior changed, run `npm run create` and inspect the generated diff.
+5. Leave deployment, `clasp push`, and `clasp deploy` to the user unless explicitly requested.

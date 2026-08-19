@@ -28,6 +28,17 @@ export interface PickerConfig {
   appId: string;
 }
 
+export type SheetRowGroupMeta = Record<
+  string,
+  {
+    __sheetRow?: number;
+    __groupParentRow?: number;
+    __isGroupParent?: boolean;
+    __groupCollapsed?: boolean;
+    __groupChildCount?: number;
+  }
+>;
+
 declare global {
   interface Window {
     __TIMELINE_BOOTSTRAP__?: Bootstrap;
@@ -37,6 +48,16 @@ declare global {
 }
 
 const DEV_WORKSPACE_KEY = "timeline-dev-workspace";
+const ROW_CACHE_PREFIX = "timeline-row-cache:";
+const ROW_CACHE_INDEX_KEY = "timeline-row-cache:index";
+const MAX_ROW_CACHE_BYTES = 1_500_000;
+const MAX_ROW_CACHE_ENTRIES = 5;
+
+export interface CachedSheetRows {
+  rows: any[];
+  headers: string[];
+  cachedAt: string;
+}
 
 type ScriptRun = Record<string, (...args: any[]) => void> & {
   withSuccessHandler: (handler: (value: any) => void) => ScriptRun;
@@ -46,10 +67,102 @@ type ScriptRun = Record<string, (...args: any[]) => void> & {
 const getScriptRun = (): ScriptRun | null =>
   (globalThis as any).google?.script?.run ?? null;
 
+const canUseLocalStorage = (): boolean => {
+  try {
+    return typeof localStorage !== "undefined";
+  } catch {
+    return false;
+  }
+};
+
+const getRowCacheKey = (spreadsheetId: string, sheetName: string): string =>
+  `${ROW_CACHE_PREFIX}${encodeURIComponent(spreadsheetId)}::${encodeURIComponent(sheetName)}`;
+
+const readRowCacheIndex = (): string[] => {
+  if (!canUseLocalStorage()) return [];
+  try {
+    const value = localStorage.getItem(ROW_CACHE_INDEX_KEY);
+    const parsed = value ? JSON.parse(value) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((key): key is string => typeof key === "string")
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeRowCacheIndex = (keys: string[]) => {
+  if (!canUseLocalStorage()) return;
+  try {
+    localStorage.setItem(ROW_CACHE_INDEX_KEY, JSON.stringify(keys));
+  } catch {
+    // Row cache is opportunistic; quota/security failures should not break loading.
+  }
+};
+
 export const isHosted = (): boolean => getScriptRun() !== null;
 
 export const getBootstrap = (): Bootstrap =>
   window.__TIMELINE_BOOTSTRAP__ ?? { mode: "webapp", bound: null };
+
+export const readCachedSheetRows = (
+  spreadsheetId: string,
+  sheetName: string,
+): CachedSheetRows | null => {
+  if (!spreadsheetId || !canUseLocalStorage()) return null;
+
+  try {
+    const value = localStorage.getItem(getRowCacheKey(spreadsheetId, sheetName));
+    if (!value) return null;
+
+    const parsed = JSON.parse(value) as Partial<CachedSheetRows>;
+    if (!Array.isArray(parsed.rows) || !Array.isArray(parsed.headers)) {
+      return null;
+    }
+
+    return {
+      rows: parsed.rows,
+      headers: parsed.headers.filter(
+        (header): header is string => typeof header === "string",
+      ),
+      cachedAt:
+        typeof parsed.cachedAt === "string"
+          ? parsed.cachedAt
+          : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const writeCachedSheetRows = (
+  spreadsheetId: string,
+  sheetName: string,
+  payload: { rows: any[]; headers: string[] },
+) => {
+  if (!spreadsheetId || !canUseLocalStorage()) return;
+
+  const key = getRowCacheKey(spreadsheetId, sheetName);
+  const value = JSON.stringify({
+    rows: payload.rows,
+    headers: payload.headers,
+    cachedAt: new Date().toISOString(),
+  });
+
+  if (value.length > MAX_ROW_CACHE_BYTES) return;
+
+  try {
+    localStorage.setItem(key, value);
+
+    const nextIndex = [key, ...readRowCacheIndex().filter((item) => item !== key)];
+    nextIndex.slice(MAX_ROW_CACHE_ENTRIES).forEach((oldKey) => {
+      localStorage.removeItem(oldKey);
+    });
+    writeRowCacheIndex(nextIndex.slice(0, MAX_ROW_CACHE_ENTRIES));
+  } catch {
+    // Ignore cache writes when browser storage is unavailable or full.
+  }
+};
 
 const invoke = (fn: string, ...args: unknown[]): Promise<unknown> =>
   new Promise((resolve, reject) => {
@@ -139,6 +252,23 @@ export const fetchSheetRows = async (
     spreadsheetId,
     sheetName,
   );
+};
+
+export const fetchSheetRowGroups = async (
+  spreadsheetId: string,
+  sheetName: string,
+): Promise<{ rowMeta: SheetRowGroupMeta }> => {
+  if (!isHosted()) return { rowMeta: {} };
+  try {
+    return await callServer<{ rowMeta: SheetRowGroupMeta }>(
+      "getSheetRowGroups",
+      spreadsheetId,
+      sheetName,
+    );
+  } catch (cause) {
+    console.warn("Timeline row grouping is unavailable.", cause);
+    return { rowMeta: {} };
+  }
 };
 
 export const fetchPickerConfig = (): Promise<PickerConfig> =>

@@ -22,6 +22,22 @@ describe("buildFieldOptions", () => {
       ),
     ).toEqual(["Due", "Name", "Start"]);
   });
+
+  it("ignores internal metadata keys used by timeline grouping", () => {
+    expect(
+      buildFieldOptions(
+        [
+          {
+            Name: "Task 1",
+            Start: "2026-01-01",
+            __sheetRow: 2,
+            __groupParentRow: 1,
+          },
+        ],
+        ["Name", "Start"],
+      ),
+    ).toEqual(["Name", "Start"]);
+  });
 });
 
 describe("sanitizeSpreadsheetData", () => {
@@ -71,6 +87,32 @@ describe("sanitizeSpreadsheetData", () => {
     );
 
     expect(tasks[0].Notes).toBe("Follow up");
+  });
+
+  it("keeps internal grouping metadata in sanitized tasks", () => {
+    const tasks = sanitizeSpreadsheetData(
+      [
+        {
+          Name: "Group parent",
+          Start: "10/09/2026",
+          End: "",
+          Due: "",
+          __sheetRow: 4,
+          __isGroupParent: true,
+          __groupCollapsed: true,
+          __groupChildCount: 3,
+        },
+      ],
+      DEFAULT_FIELD_MAP,
+    );
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      __sheetRow: 4,
+      __isGroupParent: true,
+      __groupCollapsed: true,
+      __groupChildCount: 3,
+    });
   });
 
   it("prefers the configured name column over any raw name field in the row", () => {

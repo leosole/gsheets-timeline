@@ -14,14 +14,22 @@ import {
   DEFAULT_SPREADSHEET_CONFIG,
   type SpreadsheetConfig,
 } from "../utils/sheetConfig";
-import { fetchSheetRows, fetchSheetState } from "../utils/sheetHost";
+import {
+  fetchSheetRowGroups,
+  fetchSheetRows,
+  fetchSheetState,
+  readCachedSheetRows,
+  type SheetRowGroupMeta,
+  writeCachedSheetRows,
+} from "../utils/sheetHost";
 import {
   getDefaultTabLabel,
+  type ActivePanel,
   type SheetSelection,
   type TimelineTab,
 } from "../utils/workspace";
 
-export type ViewMode = "timeline" | "settings";
+export type ViewMode = ActivePanel;
 
 interface TimelineTabViewProps {
   tab: TimelineTab;
@@ -43,6 +51,21 @@ const shouldAutoLabel = (
   return trimmed === getDefaultTabLabel({ spreadsheetName, sheetName });
 };
 
+const mergeRowsWithGroupMeta = (
+  rows: any[],
+  rowMeta: SheetRowGroupMeta,
+): any[] => {
+  if (Object.keys(rowMeta).length === 0) return rows;
+
+  return rows.map((row) => {
+    const sheetRow = typeof row.__sheetRow === "number" ? row.__sheetRow : -1;
+    const metadata = sheetRow >= 0 ? rowMeta[String(sheetRow)] : undefined;
+    if (!metadata) return row;
+
+    return { ...row, ...metadata };
+  });
+};
+
 export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
   tab,
   dark,
@@ -50,7 +73,6 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
   onDarkModeToggle,
   onTabChange,
 }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>("settings");
   const [rows, setRows] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,7 +80,10 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
   const [generatedAt, setGeneratedAt] = useState<string>(
     new Date().toLocaleString("pt-BR"),
   );
+  const [showingCachedRows, setShowingCachedRows] = useState(false);
+  const [groupingRows, setGroupingRows] = useState(false);
   const loadedKeyRef = useRef("");
+  const groupedKeyRef = useRef("");
 
   const {
     spreadsheetId,
@@ -67,23 +92,38 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     sheetName,
     configured,
   } = tab;
+  const viewMode = tab.activePanel;
 
   const loadRows = useCallback(async () => {
+    const cacheKey = `${spreadsheetId}::${sheetName}`;
+    const cached = readCachedSheetRows(spreadsheetId, sheetName);
+    if (cached && rows.length === 0) {
+      setRows(cached.rows);
+      setHeaders(cached.headers);
+      setGeneratedAt(new Date(cached.cachedAt).toLocaleString("pt-BR"));
+      setShowingCachedRows(true);
+    }
+
     setLoading(true);
     setError(null);
     try {
       const payload = await fetchSheetRows(spreadsheetId, sheetName);
       setRows(payload.rows);
       setHeaders(payload.headers);
+      setGeneratedAt(new Date().toLocaleString("pt-BR"));
+      setShowingCachedRows(false);
+      groupedKeyRef.current = "";
+      writeCachedSheetRows(spreadsheetId, sheetName, payload);
+      if (payload.rows.length === 0) groupedKeyRef.current = cacheKey;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
     }
-  }, [spreadsheetId, sheetName]);
+  }, [spreadsheetId, sheetName, rows.length]);
 
-  const handleSelectionChange = useCallback(
-    async (selection: SheetSelection) => {
+  const loadSheetState = useCallback(
+    async (selection: SheetSelection, applyDetectedConfig: boolean) => {
       setLoading(true);
       setError(null);
       try {
@@ -107,12 +147,16 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
                 sheetName: state.meta.sheetName,
               })
             : current.label,
-          config: { ...DEFAULT_SPREADSHEET_CONFIG, ...detected },
+          config: applyDetectedConfig
+            ? { ...DEFAULT_SPREADSHEET_CONFIG, ...detected }
+            : current.config,
         }));
 
         setRows(state.rows);
         setHeaders(state.headers);
-        loadedKeyRef.current = `${state.meta.spreadsheetId}::${state.meta.sheetName}`;
+        loadedKeyRef.current = state.rows.length > 0
+          ? `${state.meta.spreadsheetId}::${state.meta.sheetName}`
+          : "";
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
@@ -122,23 +166,35 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     [onTabChange],
   );
 
+  const handleSelectionChange = useCallback(
+    (selection: SheetSelection) => {
+      void loadSheetState(selection, true);
+    },
+    [loadSheetState],
+  );
+
   useEffect(() => {
     if (!spreadsheetId) {
       setRows([]);
       setHeaders([]);
+      setShowingCachedRows(false);
+      setGroupingRows(false);
       loadedKeyRef.current = "";
+      groupedKeyRef.current = "";
       return;
     }
 
-    if (!configured) {
-      void handleSelectionChange({
+    if (!configured || (viewMode === "settings" && headers.length === 0)) {
+      void loadSheetState({
         spreadsheetId,
         spreadsheetName,
         spreadsheetUrl,
         sheetName,
-      });
+      }, !configured);
       return;
     }
+
+    if (viewMode !== "timeline" && headers.length > 0) return;
 
     if (loadedKeyRef.current === `${spreadsheetId}::${sheetName}`) return;
     loadedKeyRef.current = `${spreadsheetId}::${sheetName}`;
@@ -149,9 +205,41 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     spreadsheetUrl,
     sheetName,
     configured,
-    handleSelectionChange,
+    headers.length,
+    viewMode,
+    loadSheetState,
     loadRows,
   ]);
+
+  useEffect(() => {
+    if (!spreadsheetId || viewMode !== "timeline" || rows.length === 0) return;
+
+    const key = `${spreadsheetId}::${sheetName}`;
+    if (groupedKeyRef.current === key) return;
+    groupedKeyRef.current = key;
+
+    let cancelled = false;
+    setGroupingRows(true);
+    fetchSheetRowGroups(spreadsheetId, sheetName)
+      .then(({ rowMeta }) => {
+        if (cancelled) return;
+        setRows((currentRows) => mergeRowsWithGroupMeta(currentRows, rowMeta));
+      })
+      .finally(() => {
+        if (!cancelled) setGroupingRows(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [spreadsheetId, sheetName, viewMode, rows.length]);
+
+  const handleViewModeChange = useCallback(
+    (activePanel: ViewMode) => {
+      onTabChange((current) => ({ ...current, activePanel }));
+    },
+    [onTabChange],
+  );
 
   const handleConfigChange = useCallback<
     React.Dispatch<React.SetStateAction<SpreadsheetConfig>>
@@ -170,29 +258,13 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     [onTabChange],
   );
 
-  const fieldOptions = useMemo(
-    () => buildFieldOptions(rows, headers),
-    [rows, headers],
-  );
-
-  const metadataFields = useMemo(() => {
-    const coreFields = new Set<string>(
-      [
-        tab.config.fieldMap.name,
-        tab.config.fieldMap.start,
-        tab.config.fieldMap.end,
-        tab.config.fieldMap.due,
-        tab.config.statusField || "",
-      ].filter(Boolean),
-    );
-
-    return fieldOptions.filter((option) => !coreFields.has(option));
-  }, [fieldOptions, tab.config.fieldMap, tab.config.statusField]);
+  const fieldOptions = useMemo(() => buildFieldOptions([], headers), [headers]);
 
   const tasks = useMemo(
     () => sanitizeSpreadsheetData(rows, tab.config.fieldMap),
     [rows, tab.config.fieldMap],
   );
+  const showInitialLoading = loading && tasks.length === 0;
 
   function onSync() {
     loadRows();
@@ -205,7 +277,7 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
         viewMode={viewMode}
         dark={dark}
         loading={loading}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         onDarkModeToggle={onDarkModeToggle}
         onSync={onSync}
       />
@@ -222,6 +294,20 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
       {viewMode === "timeline" ? (
         tasks.length > 0 ? (
           <div className="flex-1 min-h-0">
+            {loading && showingCachedRows ? (
+              <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                Showing cached rows while refreshing from Google Sheets.
+              </div>
+            ) : null}
+            {groupingRows ? (
+              <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                <span
+                  className="h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary"
+                  aria-hidden="true"
+                />
+                <span>Grouping rows...</span>
+              </div>
+            ) : null}
             <Timeline
               tasks={tasks}
               title={tab.config.title}
@@ -231,6 +317,21 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
               statusField={tab.config.statusField}
               generatedAt={generatedAt}
             />
+          </div>
+        ) : showInitialLoading ? (
+          <div className="flex min-h-[60vh] items-center justify-center p-8 text-center">
+            <div className="flex max-w-md flex-col items-center rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+              <div
+                className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary"
+                aria-hidden="true"
+              />
+              <h2 className="mt-4 text-lg font-semibold">
+                Loading spreadsheet rows
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Fetching the latest timeline data from Google Sheets.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="flex min-h-[60vh] items-center justify-center p-8 text-center">
@@ -250,8 +351,8 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
           <SettingsPanel
             tab={tab}
             fieldOptions={fieldOptions}
-            metadataFields={metadataFields}
             allowPicker={allowPicker}
+            loading={loading}
             onConfigChange={handleConfigChange}
             onSelectionChange={handleSelectionChange}
           />

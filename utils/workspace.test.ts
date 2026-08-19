@@ -20,6 +20,7 @@ describe("createWorkspace", () => {
     expect(workspace.tabs).toHaveLength(1);
     expect(workspace.activeTabId).toBe(workspace.tabs[0].id);
     expect(workspace.tabs[0].spreadsheetId).toBe("");
+    expect(workspace.tabs[0].activePanel).toBe("settings");
     expect(workspace.tabs[0].configured).toBe(false);
   });
 });
@@ -128,9 +129,24 @@ describe("parseWorkspace", () => {
       label: "New timeline",
       spreadsheetId: "abc",
       sheetName: "",
+      activePanel: "settings",
       configured: false,
     });
     expect(workspace.tabs[0].config.fieldMap).toEqual(DEFAULT_FIELD_MAP);
+  });
+
+  it("preserves valid active panels and repairs invalid ones", () => {
+    const workspace = parseWorkspace(
+      JSON.stringify({
+        tabs: [
+          { id: "a", activePanel: "timeline" },
+          { id: "b", activePanel: "details" },
+        ],
+      }),
+    );
+
+    expect(workspace.tabs[0].activePanel).toBe("timeline");
+    expect(workspace.tabs[1].activePanel).toBe("settings");
   });
 
   it("repairs an activeTabId that points at a removed tab", () => {

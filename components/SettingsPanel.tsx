@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { SpreadsheetConfig } from "../utils/sheetConfig";
 import { fetchSpreadsheetMeta } from "../utils/sheetHost";
 import { pickSpreadsheet } from "../utils/picker";
@@ -7,8 +7,8 @@ import type { SheetSelection, TimelineTab } from "../utils/workspace";
 interface SettingsPanelProps {
   tab: TimelineTab;
   fieldOptions: string[];
-  metadataFields: string[];
   allowPicker: boolean;
+  loading: boolean;
   onConfigChange: React.Dispatch<React.SetStateAction<SpreadsheetConfig>>;
   onSelectionChange: (selection: SheetSelection) => void;
 }
@@ -16,24 +16,33 @@ interface SettingsPanelProps {
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   tab,
   fieldOptions,
-  metadataFields,
   allowPicker,
+  loading,
   onConfigChange,
   onSelectionChange,
 }) => {
-  const config = tab.config;
+  const [draftConfig, setDraftConfig] = useState<SpreadsheetConfig>(
+    tab.config,
+  );
   const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [sheetLoading, setSheetLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { spreadsheetId } = tab;
 
   useEffect(() => {
+    setDraftConfig(tab.config);
+  }, [tab.config]);
+
+  useEffect(() => {
     if (!spreadsheetId) {
       setSheetNames([]);
+      setSheetLoading(false);
       return;
     }
 
     let cancelled = false;
+    setSheetLoading(true);
     fetchSpreadsheetMeta(spreadsheetId)
       .then((meta) => {
         if (!cancelled) setSheetNames(meta.sheetNames);
@@ -42,6 +51,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : String(cause));
         }
+      })
+      .finally(() => {
+        if (!cancelled) setSheetLoading(false);
       });
 
     return () => {
@@ -63,7 +75,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     key: "name" | "start" | "end" | "due",
     value: string,
   ) => {
-    onConfigChange((current) => ({
+    setDraftConfig((current) => ({
       ...current,
       fieldMap: { ...current.fieldMap, [key]: value },
     }));
@@ -73,13 +85,44 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     field: "popupFields" | "filterFields",
     value: string,
   ) => {
-    onConfigChange((current) => {
+    setDraftConfig((current) => {
       const existing = current[field] || [];
       const next = existing.includes(value)
         ? existing.filter((item) => item !== value)
         : [...existing, value];
       return { ...current, [field]: next };
     });
+  };
+
+  const metadataFields = useMemo(() => {
+    const coreFields = new Set<string>(
+      [
+        draftConfig.fieldMap.name,
+        draftConfig.fieldMap.start,
+        draftConfig.fieldMap.end,
+        draftConfig.fieldMap.due,
+        draftConfig.statusField || "",
+      ].filter(Boolean),
+    );
+
+    return fieldOptions.filter((option) => !coreFields.has(option));
+  }, [draftConfig, fieldOptions]);
+
+  const hasUnsavedChanges = useMemo(
+    () => JSON.stringify(draftConfig) !== JSON.stringify(tab.config),
+    [draftConfig, tab.config],
+  );
+
+  const fieldOptionsLoading = loading && fieldOptions.length === 0;
+  const disableFieldSelects = loading || fieldOptions.length === 0;
+  const disableSheetSelect = loading || sheetLoading || sheetNames.length === 0;
+
+  const handleSave = () => {
+    onConfigChange(draftConfig);
+  };
+
+  const handleDiscard = () => {
+    setDraftConfig(tab.config);
   };
 
   return (
@@ -93,6 +136,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       ) : null}
 
+      {(loading || sheetLoading) && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <span
+            className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary"
+            aria-hidden="true"
+          />
+          <span>Loading configuration options...</span>
+        </div>
+      )}
+
+      {hasUnsavedChanges ? (
+        <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground">
+          You have unsaved configuration changes. Save to apply them to the timeline.
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Spreadsheet
@@ -101,8 +160,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           {allowPicker ? (
             <button
               type="button"
+              disabled={loading}
               onClick={() => void handlePick()}
-              className="cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
+              className="cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               {tab.spreadsheetId ? "Change…" : "Choose…"}
             </button>
@@ -119,7 +179,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </label>
         <select
           value={tab.sheetName}
-          disabled={sheetNames.length === 0}
+          disabled={disableSheetSelect}
           onChange={(event) =>
             onSelectionChange({
               spreadsheetId: tab.spreadsheetId,
@@ -131,6 +191,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
         >
           <option value="">Select a sheet</option>
+          {sheetLoading ? <option value="">Loading sheets...</option> : null}
           {sheetNames.map((name) => (
             <option key={name} value={name}>
               {name}
@@ -144,9 +205,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           Timeline title
         </label>
         <input
-          value={config.title}
+          disabled={loading}
+          value={draftConfig.title}
           onChange={(event) =>
-            onConfigChange((current) => ({
+            setDraftConfig((current) => ({
               ...current,
               title: event.target.value,
             }))
@@ -161,9 +223,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           Status column
         </label>
         <select
-          value={config.statusField || ""}
+          disabled={disableFieldSelects}
+          value={draftConfig.statusField || ""}
           onChange={(event) =>
-            onConfigChange((current) => ({
+            setDraftConfig((current) => ({
               ...current,
               statusField: event.target.value,
             }))
@@ -171,6 +234,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="">None</option>
+          {fieldOptionsLoading ? <option value="">Loading columns...</option> : null}
           {fieldOptions.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -193,13 +257,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               {label}
             </label>
             <select
-              value={config.fieldMap[key]}
+              disabled={disableFieldSelects}
+              value={draftConfig.fieldMap[key]}
               onChange={(event) =>
                 updateFieldSelection(key, event.target.value)
               }
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Select a column</option>
+              {fieldOptionsLoading ? <option value="">Loading columns...</option> : null}
               {fieldOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -222,8 +288,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1 text-xs"
               >
                 <input
+                  disabled={loading}
                   type="checkbox"
-                  checked={config[field].includes(option)}
+                  checked={draftConfig[field].includes(option)}
                   onChange={() => toggleSelectionList(field, option)}
                 />
                 <span>{option}</span>
@@ -232,6 +299,25 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
         </div>
       ))}
+
+      <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-border bg-background px-4 py-3">
+        <button
+          type="button"
+          disabled={loading || !hasUnsavedChanges}
+          onClick={handleDiscard}
+          className="cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Discard
+        </button>
+        <button
+          type="button"
+          disabled={loading || !hasUnsavedChanges}
+          onClick={handleSave}
+          className="cursor-pointer rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Save configuration
+        </button>
+      </div>
     </div>
   );
 };

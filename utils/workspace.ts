@@ -7,6 +7,8 @@ import {
 
 export const WORKSPACE_VERSION = 1;
 
+export type ActivePanel = "settings" | "timeline";
+
 export interface SheetSelection {
   spreadsheetId: string;
   spreadsheetName: string;
@@ -17,6 +19,7 @@ export interface SheetSelection {
 export interface TimelineTab extends SheetSelection {
   id: string;
   label: string;
+  activePanel: ActivePanel;
   /** False until the column mapping has been auto-detected for the current sheet. */
   configured: boolean;
   config: SpreadsheetConfig;
@@ -66,6 +69,7 @@ export const createTab = (
       sheetName: overrides.sheetName,
     }),
   ...EMPTY_SELECTION,
+  activePanel: "settings",
   configured: false,
   config: { ...DEFAULT_SPREADSHEET_CONFIG },
   ...overrides,
@@ -115,6 +119,10 @@ const normalizeTab = (
     spreadsheetUrl:
       typeof tab.spreadsheetUrl === "string" ? tab.spreadsheetUrl : "",
     sheetName: typeof tab.sheetName === "string" ? tab.sheetName : "",
+    activePanel:
+      tab.activePanel === "timeline" || tab.activePanel === "settings"
+        ? tab.activePanel
+        : "settings",
     configured: tab.configured === true,
     config: normalizeConfig(tab.config),
   };
