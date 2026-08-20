@@ -1,18 +1,19 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import dayjs from "dayjs";
-import { Controls } from "./Controls";
-import { Legend } from "./Legend";
-import { TaskBar } from "./TaskBar";
-import { TaskPopover } from "./TaskPopover";
-import { TimelineHeader } from "./TimelineHeader";
+import { cn } from "../utils/cn";
+import { Controls } from "./controls";
+import { Legend } from "./legend";
+import { TaskBar } from "./task-bar";
+import { TaskPopover } from "./task-popover";
+import { TimelineHeader } from "./timeline-header";
 import {
   calculateDateRange,
   generateTimelineData,
   getCurrentDatePosition,
   getDaySize,
-} from "../utils/dateUtils";
-import { getTaskStatuses } from "../utils/barMetrics";
-import type { Granularity } from "../utils/dateUtils";
+} from "../utils/date-utils";
+import { getTaskStatuses } from "../utils/bar-metrics";
+import type { Granularity } from "../utils/date-utils";
 import { BiCollapseVertical, BiExpandVertical } from "react-icons/bi";
 import { PiCaretDownBold } from "react-icons/pi";
 
@@ -413,13 +414,16 @@ export const Timeline: React.FC<TimelineProps> = ({
                             }
                           >
                             <PiCaretDownBold
-                              className={`transition-transform duration-200 ${isCollapsed ? "rotate-0" : "rotate-180"}`}
+                              className={cn(
+                                "transition-transform duration-200",
+                                isCollapsed ? "rotate-0" : "rotate-180",
+                              )}
                             />
                           </button>
                         ) : (
                           <span className="mr-1 inline-block h-5 w-5 shrink-0" />
                         )}
-                        <span className={`truncate ${isChild ? "ml-3" : ""}`}>
+                        <span className={cn("truncate", isChild && "ml-3")}>
                           {task.name}
                         </span>
                       </div>

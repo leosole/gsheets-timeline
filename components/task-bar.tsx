@@ -1,6 +1,7 @@
 import React from "react";
-import { calculateBarMetrics } from "../utils/barMetrics";
-import type { TimelineData, Granularity } from "../utils/dateUtils";
+import { calculateBarMetrics } from "../utils/bar-metrics";
+import { cn } from "../utils/cn";
+import type { TimelineData, Granularity } from "../utils/date-utils";
 
 interface TaskBarProps {
   task: any;
@@ -95,7 +96,10 @@ export const TaskBar: React.FC<TaskBarProps> = ({
         onClick={() => onSelect?.(task)}
       >
         <div
-          className={`w-full h-full rounded border ${metrics.customColors ? "" : `${metrics.colors.bg} ${metrics.colors.border}`}`}
+          className={cn(
+            "w-full h-full rounded border",
+            !metrics.customColors && [metrics.colors.bg, metrics.colors.border],
+          )}
           style={{
             backgroundColor: metrics.customColors?.bg,
             borderColor: metrics.customColors?.darkBorder,

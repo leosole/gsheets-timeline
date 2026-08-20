@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { TimelineTab } from "../utils/workspace";
+import { cn } from "../utils/cn";
 import { MdAddBox, MdClose, MdEdit } from "react-icons/md";
+import { Button, TextInput } from "./ui";
 
 interface TabBarProps {
   tabs: TimelineTab[];
@@ -50,67 +52,68 @@ export const TabBar: React.FC<TabBarProps> = ({
         return (
           <div
             key={tab.id}
-            className={`group flex shrink-0 items-center gap-2 rounded-t-lg border border-b-0 px-3 py-1.5 text-sm ${
+            className={cn(
+              "group flex shrink-0 items-center gap-2 rounded-t-lg border border-b-0 px-3 py-1.5 text-sm",
               isActive
                 ? "border-border bg-card font-medium"
-                : "border-transparent bg-transparent text-muted-foreground hover:bg-card/60"
-            }`}
+                : "border-transparent bg-transparent text-muted-foreground hover:bg-card/60",
+            )}
           >
             {editingId === tab.id ? (
-              <input
-                ref={inputRef}
+              <TextInput
+                inputRef={inputRef}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={setDraft}
                 onBlur={commitRename}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commitRename();
                   if (event.key === "Escape") setEditingId(null);
                 }}
-                className="w-32 rounded border border-border bg-background px-1 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-32 px-1 py-0.5"
               />
             ) : (
               <>
-                <button
-                  type="button"
+                <Button
+                  variant="text"
                   onClick={() => onSelect(tab.id)}
                   title={tab.spreadsheetName || "No spreadsheet selected"}
                   className="max-w-45 cursor-pointer truncate"
                 >
                   {tab.label}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="icon"
                   onClick={() => startRename(tab)}
-                  aria-label={`Edit label for ${tab.label}`}
+                  ariaLabel={`Edit label for ${tab.label}`}
                   title="Edit tab label"
-                  className="cursor-pointer rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+                  className="opacity-0 focus:opacity-100 group-hover:opacity-100"
                 >
                   <MdEdit />
-                </button>
+                </Button>
               </>
             )}
-            <button
-              type="button"
+            <Button
+              variant="icon"
               onClick={() => requestClose(tab)}
               title="Close"
-              aria-label={`Close ${tab.label}`}
-              className="cursor-pointer rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+              ariaLabel={`Close ${tab.label}`}
+              className="opacity-0 focus:opacity-100 group-hover:opacity-100"
             >
               <MdClose />
-            </button>
+            </Button>
           </div>
         );
       })}
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         onClick={onCreate}
-        aria-label="New timeline tab"
+        ariaLabel="New timeline tab"
         title="New timeline tab"
-        className="mb-1 shrink-0 cursor-pointer rounded-md px-2 py-1 text-lg leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="mb-1 shrink-0 rounded-md px-2 py-1 text-lg leading-none"
       >
         <MdAddBox />
-      </button>
+      </Button>
     </div>
   );
 };

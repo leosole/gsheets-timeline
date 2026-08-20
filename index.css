@@ -11,6 +11,7 @@
   --color-border: #e0e0e0;
   --color-primary: #4a90d9;
   --color-primary-hover: #417CBB;
+  --color-accent: #C0DEFF;
   --color-secondary: #6c757d;
   --color-timeline-doing: #eab308;
   --color-timeline-done: #22c55e;
@@ -24,6 +25,7 @@
   --color-card: #2d2d2d;
   --color-foreground: #e5e5e5;
   --color-muted-foreground: #999999;
+  --color-accent: #123D6B;
   --color-muted: #333333;
   --color-border: #404040;
   color-scheme: light dark;

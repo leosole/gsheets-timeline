@@ -1,5 +1,6 @@
 import React from "react";
 import { MdLightMode, MdNightlight, MdSync } from "react-icons/md";
+import { Button, ToggleGroup } from "./ui";
 
 type ViewMode = "timeline" | "settings";
 
@@ -24,40 +25,34 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     <div className="mx-auto flex max-w-[1800px] items-center justify-between px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="text-lg font-bold">Timeline</div>
-        <div className="flex rounded-lg border border-border bg-background p-1">
-          {(["settings", "timeline"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => onViewModeChange(mode)}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer ${
-                viewMode === mode
-                  ? "bg-primary text-white"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {mode === "timeline" ? "Timeline" : "Configuration"}
-            </button>
-          ))}
-        </div>
+        <ToggleGroup
+          className="p-1"
+          itemClassName="rounded-md px-3 py-1.5 text-sm transition-colors"
+          value={viewMode}
+          onChange={onViewModeChange}
+          options={[
+            { value: "settings", label: "Configuration" },
+            { value: "timeline", label: "Timeline" },
+          ]}
+        />
         <div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={onDarkModeToggle}
-            className="cursor-pointer rounded-lg p-2 text-muted-foreground hover:bg-muted"
+            className="p-2"
             title={dark ? "Light mode" : "Dark mode"}
           >
             {dark ? <MdLightMode /> : <MdNightlight />}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={onSync}
             disabled={loading}
-            className="ml-auto cursor-pointer rounded-lg p-2 text-muted-foreground hover:bg-muted disabled:animate-pulse disabled:opacity-50"
+            className="ml-auto p-2 disabled:animate-pulse"
             title="Sync data"
           >
             <MdSync />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

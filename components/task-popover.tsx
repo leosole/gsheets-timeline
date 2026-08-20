@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from "react";
 import dayjs from "dayjs";
-import { getTaskStatuses } from "../utils/barMetrics";
-import { parseDate } from "../utils/dateUtils";
+import { getTaskStatuses } from "../utils/bar-metrics";
+import { cn } from "../utils/cn";
+import { parseDate } from "../utils/date-utils";
 
 interface TaskPopoverProps {
   task: any;
@@ -156,7 +157,11 @@ export const TaskPopover: React.FC<TaskPopoverProps> = ({
               return (
                 <div
                   key={s}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-transparent ${border} ${color}`}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-transparent",
+                    border,
+                    color,
+                  )}
                   style={
                     bgColor
                       ? {
@@ -212,7 +217,7 @@ export const TaskPopover: React.FC<TaskPopoverProps> = ({
                 return (
                   <div key={field} className="flex justify-between">
                     <span className="text-muted-foreground">{field}:</span>
-                    <span className="font-medium text-right max-w-[60%] truncate">
+                    <span className="font-medium text-right max-w-[60%]">
                       {String(val)}
                     </span>
                   </div>

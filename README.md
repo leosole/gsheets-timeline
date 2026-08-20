@@ -84,7 +84,13 @@ npm test
 
 Outside Apps Script there is no `google.script.run`, so the host calls fall back
 to stubs: the workspace is stored in `localStorage` and sheet data comes from
-`window.__TIMELINE_DATA__` / `window.__TIMELINE_HEADERS__` if you set them.
+`window.__TIMELINE_DATA__` / `window.__TIMELINE_HEADERS__`.
+
+`npm run dev` now preloads a built-in mock dataset from
+`utils/dev-mock-data.ts` when those globals are not set, so the timeline is
+immediately usable locally. If you want custom local data, define
+`window.__TIMELINE_DATA__` and `window.__TIMELINE_HEADERS__` before the app
+bootstraps and those values will be used instead.
 
 ## Notes
 

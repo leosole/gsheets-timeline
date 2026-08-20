@@ -1,4 +1,4 @@
-import type { SpreadsheetConfig } from "./sheetConfig";
+import type { SpreadsheetConfig } from "./sheet-config";
 import type { SheetSelection } from "./workspace";
 
 export type HostMode = "addon" | "webapp";
@@ -48,10 +48,43 @@ declare global {
 }
 
 const DEV_WORKSPACE_KEY = "timeline-dev-workspace";
+const DEV_SPREADSHEET_ID = "dev-spreadsheet";
+const DEV_SPREADSHEET_NAME = "Dev spreadsheet";
+const DEV_SHEET_NAME = "Sheet1";
 const ROW_CACHE_PREFIX = "timeline-row-cache:";
 const ROW_CACHE_INDEX_KEY = "timeline-row-cache:index";
 const MAX_ROW_CACHE_BYTES = 1_500_000;
 const MAX_ROW_CACHE_ENTRIES = 5;
+
+const getDefaultDevWorkspace = (): string =>
+  JSON.stringify({
+    tabs: [
+      {
+        label: `${DEV_SPREADSHEET_NAME}/${DEV_SHEET_NAME}`,
+        spreadsheetId: DEV_SPREADSHEET_ID,
+        spreadsheetName: DEV_SPREADSHEET_NAME,
+        spreadsheetUrl: "",
+        sheetName: DEV_SHEET_NAME,
+        activePanel: "timeline",
+        configured: true,
+      },
+    ],
+  });
+
+const hasAnySpreadsheetSelection = (json: string): boolean => {
+  try {
+    const parsed = JSON.parse(json) as {
+      tabs?: Array<{ spreadsheetId?: unknown }>;
+    };
+    if (!Array.isArray(parsed.tabs)) return false;
+    return parsed.tabs.some(
+      (tab) =>
+        typeof tab?.spreadsheetId === "string" && tab.spreadsheetId.trim(),
+    );
+  } catch {
+    return false;
+  }
+};
 
 export interface CachedSheetRows {
   rows: any[];
@@ -199,17 +232,25 @@ const devSheetState = (selection: Partial<SheetSelection>): SheetState => ({
     ? window.__TIMELINE_HEADERS__
     : [],
   meta: {
-    spreadsheetId: selection.spreadsheetId || "dev-spreadsheet",
-    spreadsheetName: selection.spreadsheetName || "Dev spreadsheet",
+    spreadsheetId: selection.spreadsheetId || DEV_SPREADSHEET_ID,
+    spreadsheetName: selection.spreadsheetName || DEV_SPREADSHEET_NAME,
     spreadsheetUrl: selection.spreadsheetUrl || "",
-    sheetName: selection.sheetName || "Sheet1",
+    sheetName: selection.sheetName || DEV_SHEET_NAME,
   },
   config: {},
 });
 
 // Stored as an opaque string so an empty workspace is not run through JSON.parse.
 export const fetchWorkspace = async (): Promise<string> => {
-  if (!isHosted()) return localStorage.getItem(DEV_WORKSPACE_KEY) || "";
+  if (!isHosted()) {
+    const stored = localStorage.getItem(DEV_WORKSPACE_KEY) || "";
+    if (!stored || !hasAnySpreadsheetSelection(stored)) {
+      const fallback = getDefaultDevWorkspace();
+      localStorage.setItem(DEV_WORKSPACE_KEY, fallback);
+      return fallback;
+    }
+    return stored;
+  }
   const payload = await invoke("getWorkspace");
   return typeof payload === "string" ? payload : "";
 };
@@ -227,10 +268,10 @@ export const fetchSpreadsheetMeta = async (
 ): Promise<SpreadsheetMeta> => {
   if (!isHosted()) {
     return {
-      spreadsheetId: spreadsheetId || "dev-spreadsheet",
-      spreadsheetName: "Dev spreadsheet",
+      spreadsheetId: spreadsheetId || DEV_SPREADSHEET_ID,
+      spreadsheetName: DEV_SPREADSHEET_NAME,
       spreadsheetUrl: "",
-      sheetNames: ["Sheet1"],
+      sheetNames: [DEV_SHEET_NAME],
     };
   }
   return callServer<SpreadsheetMeta>("getSpreadsheetMeta", spreadsheetId);

@@ -1,4 +1,4 @@
-import { fetchPickerConfig } from "./sheetHost";
+import { fetchPickerConfig } from "./sheet-host";
 import type { SheetSelection } from "./workspace";
 
 const GAPI_SRC = "https://apis.google.com/js/api.js";

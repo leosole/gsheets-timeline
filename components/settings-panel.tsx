@@ -1,8 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { SpreadsheetConfig } from "../utils/sheetConfig";
-import { fetchSpreadsheetMeta } from "../utils/sheetHost";
+import type { SpreadsheetConfig } from "../utils/sheet-config";
+import { fetchSpreadsheetMeta } from "../utils/sheet-host";
 import { pickSpreadsheet } from "../utils/picker";
 import type { SheetSelection, TimelineTab } from "../utils/workspace";
+import {
+  Alert,
+  Button,
+  CheckboxChip,
+  FormField,
+  Select,
+  Spinner,
+  TextInput,
+} from "./ui";
 
 interface SettingsPanelProps {
   tab: TimelineTab;
@@ -114,6 +123,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const fieldOptionsLoading = loading && fieldOptions.length === 0;
   const disableFieldSelects = loading || fieldOptions.length === 0;
   const disableSheetSelect = loading || sheetLoading || sheetNames.length === 0;
+  const sheetSelectOptions = sheetLoading
+    ? [{ value: "", label: "Loading sheets..." }]
+    : sheetNames;
+  const dynamicFieldOptions = fieldOptionsLoading
+    ? [{ value: "", label: "Loading columns..." }]
+    : fieldOptions;
 
   const handleSave = () => {
     onConfigChange(draftConfig);
@@ -126,123 +141,90 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   return (
     <div className="space-y-4 p-4">
       {error ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
+        <Alert type="error" role="alert">
           {error}
-        </div>
+        </Alert>
       ) : null}
 
       {(loading || sheetLoading) && (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          <span
-            className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary"
-            aria-hidden="true"
-          />
+        <Alert type="muted" className="flex items-center gap-2" role="status">
+          <Spinner />
           <span>Loading configuration options...</span>
-        </div>
+        </Alert>
       )}
 
       {hasUnsavedChanges ? (
-        <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground">
+        <Alert type="info">
           You have unsaved configuration changes. Save to apply them to the
           timeline.
-        </div>
+        </Alert>
       ) : null}
 
-      <div className="space-y-2">
-        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Spreadsheet
-        </label>
+      <FormField label="Spreadsheet">
         <div className="flex flex-wrap items-center gap-2">
           {allowPicker ? (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               disabled={loading}
               onClick={() => void handlePick()}
-              className="cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               {tab.spreadsheetId ? "Change…" : "Choose…"}
-            </button>
+            </Button>
           ) : null}
           <span className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
             {tab.spreadsheetName || "No spreadsheet selected"}
           </span>
         </div>
-      </div>
+      </FormField>
 
-      <div className="space-y-2">
-        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Sheet
-        </label>
-        <select
+      <FormField label="Sheet">
+        <Select
           value={tab.sheetName}
           disabled={disableSheetSelect}
-          onChange={(event) =>
+          onChange={(value) =>
             onSelectionChange({
               spreadsheetId: tab.spreadsheetId,
               spreadsheetName: tab.spreadsheetName,
               spreadsheetUrl: tab.spreadsheetUrl,
-              sheetName: event.target.value,
+              sheetName: value,
             })
           }
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-        >
-          <option value="">Select a sheet</option>
-          {sheetLoading ? <option value="">Loading sheets...</option> : null}
-          {sheetNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-      </div>
+          options={sheetSelectOptions}
+          placeholder="Select a sheet"
+          className="w-full"
+        />
+      </FormField>
 
-      <div className="space-y-2">
-        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Timeline title
-        </label>
-        <input
+      <FormField label="Timeline title">
+        <TextInput
           disabled={loading}
           value={draftConfig.title}
-          onChange={(event) =>
+          onChange={(value) =>
             setDraftConfig((current) => ({
               ...current,
-              title: event.target.value,
+              title: value,
             }))
           }
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full"
           placeholder="Project timeline"
         />
-      </div>
+      </FormField>
 
-      <div className="space-y-2">
-        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Status column
-        </label>
-        <select
+      <FormField label="Status column">
+        <Select
           disabled={disableFieldSelects}
           value={draftConfig.statusField || ""}
-          onChange={(event) =>
+          onChange={(value) =>
             setDraftConfig((current) => ({
               ...current,
-              statusField: event.target.value,
+              statusField: value,
             }))
           }
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <option value="">None</option>
-          {fieldOptionsLoading ? (
-            <option value="">Loading columns...</option>
-          ) : null}
-          {fieldOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
+          options={dynamicFieldOptions}
+          placeholder="None"
+          className="w-full"
+        />
+      </FormField>
 
       <div className="grid gap-3 md:grid-cols-2">
         {(
@@ -253,73 +235,53 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             ["due", "Due date"],
           ] as const
         ).map(([key, label]) => (
-          <div key={key} className="space-y-2">
-            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {label}
-            </label>
-            <select
+          <FormField key={key} label={label}>
+            <Select
               disabled={disableFieldSelects}
               value={draftConfig.fieldMap[key]}
-              onChange={(event) =>
-                updateFieldSelection(key, event.target.value)
-              }
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="">Select a column</option>
-              {fieldOptionsLoading ? (
-                <option value="">Loading columns...</option>
-              ) : null}
-              {fieldOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
+              onChange={(value) => updateFieldSelection(key, value)}
+              options={dynamicFieldOptions}
+              placeholder="Select a column"
+              className="w-full"
+            />
+          </FormField>
         ))}
       </div>
 
       {(["popupFields", "filterFields"] as const).map((field) => (
-        <div key={field} className="space-y-2">
-          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {field === "popupFields" ? "Popup extra fields" : "Filter fields"}
-          </label>
+        <FormField
+          key={field}
+          label={field === "popupFields" ? "Popup extra fields" : "Filter fields"}
+        >
           <div className="flex flex-wrap gap-2">
             {metadataFields.map((option) => (
-              <label
+              <CheckboxChip
                 key={option}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1 text-xs"
-              >
-                <input
-                  disabled={loading}
-                  type="checkbox"
-                  checked={draftConfig[field].includes(option)}
-                  onChange={() => toggleSelectionList(field, option)}
-                />
-                <span>{option}</span>
-              </label>
+                disabled={loading}
+                checked={draftConfig[field].includes(option)}
+                onChange={() => toggleSelectionList(field, option)}
+                label={option}
+              />
             ))}
           </div>
-        </div>
+        </FormField>
       ))}
 
       <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-border bg-background px-4 py-3">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           disabled={loading || !hasUnsavedChanges}
           onClick={handleDiscard}
-          className="cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         >
           Discard
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
           disabled={loading || !hasUnsavedChanges}
           onClick={handleSave}
-          className="cursor-pointer rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Save configuration
-        </button>
+        </Button>
       </div>
     </div>
   );

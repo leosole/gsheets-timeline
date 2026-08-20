@@ -1,7 +1,7 @@
-import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
-import { viteSingleFile } from 'vite-plugin-singlefile';
+import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import { viteSingleFile } from "vite-plugin-singlefile";
 export default defineConfig({
     plugins: [react(), tailwindcss(), viteSingleFile()],
     build: {
@@ -10,11 +10,12 @@ export default defineConfig({
         reportCompressedSize: false,
         rollupOptions: {
             output: {
-                manualChunks: undefined
-            }
-        }
+                manualChunks: undefined,
+            },
+        },
     },
     test: {
-        environment: 'node'
-    }
+        environment: "node",
+        include: ["test/**/*.test.ts", "test/**/*.spec.ts"],
+    },
 });

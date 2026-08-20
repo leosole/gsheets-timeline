@@ -1,6 +1,7 @@
 import React from "react";
 import dayjs from "dayjs";
-import type { Granularity, TimelineData } from "../utils/dateUtils";
+import { cn } from "../utils/cn";
+import type { Granularity, TimelineData } from "../utils/date-utils";
 
 interface TimelineHeaderProps {
   timelineData: TimelineData;
@@ -120,11 +121,12 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
               {days.map((day, index) => (
                 <div
                   key={index}
-                  className={`border-r border-border text-center text-xs leading-3 last:border-r-0 ${
+                  className={cn(
+                    "border-r border-border text-center text-xs leading-3 last:border-r-0",
                     day.date === todayStr
                       ? "bg-timeline-today/10 font-bold text-timeline-today"
-                      : "text-muted-foreground"
-                  }`}
+                      : "text-muted-foreground",
+                  )}
                   style={{ width: `${daySize}px` }}
                 >
                   {day.displayLabel}

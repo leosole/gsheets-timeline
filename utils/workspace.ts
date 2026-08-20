@@ -3,7 +3,7 @@ import {
   normalizeFieldMap,
   normalizeStatusField,
   type SpreadsheetConfig,
-} from "./sheetConfig";
+} from "./sheet-config";
 
 export const WORKSPACE_VERSION = 1;
 

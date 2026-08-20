@@ -5,15 +5,15 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { AppHeader } from "./AppHeader";
-import { SettingsPanel } from "./SettingsPanel";
-import { Timeline } from "./Timeline";
+import { AppHeader } from "./app-header";
+import { SettingsPanel } from "./settings-panel";
+import { Timeline } from "./timeline";
 import {
   buildFieldOptions,
   sanitizeSpreadsheetData,
   DEFAULT_SPREADSHEET_CONFIG,
   type SpreadsheetConfig,
-} from "../utils/sheetConfig";
+} from "../utils/sheet-config";
 import {
   fetchSheetRowGroups,
   fetchSheetRows,
@@ -21,7 +21,7 @@ import {
   readCachedSheetRows,
   type SheetRowGroupMeta,
   writeCachedSheetRows,
-} from "../utils/sheetHost";
+} from "../utils/sheet-host";
 import {
   getDefaultTabLabel,
   type ActivePanel,

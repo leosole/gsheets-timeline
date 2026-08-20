@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_FIELD_MAP } from "./sheetConfig";
+import { DEFAULT_FIELD_MAP } from "../utils/sheet-config";
 import {
   addTab,
   closeTab,
@@ -11,7 +11,7 @@ import {
   renameTab,
   setActiveTab,
   updateTab,
-} from "./workspace";
+} from "../utils/workspace";
 
 describe("createWorkspace", () => {
   it("starts with a single unconfigured tab that is active", () => {

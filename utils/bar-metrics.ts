@@ -5,7 +5,7 @@ import {
   formatDateToISO,
   type TimelineData,
   type Granularity,
-} from "./dateUtils";
+} from "./date-utils";
 
 export interface BarMetrics {
   startPx: number;

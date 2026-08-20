@@ -1,12 +1,12 @@
 import dayjs from "dayjs";
 import { describe, expect, it } from "vitest";
-import { calculateBarMetrics } from "./barMetrics";
-import { generateTimelineData } from "./dateUtils";
+import { calculateBarMetrics } from "../utils/bar-metrics";
+import { generateTimelineData } from "../utils/date-utils";
 import {
   DEFAULT_FIELD_MAP,
   buildFieldOptions,
   sanitizeSpreadsheetData,
-} from "./sheetConfig";
+} from "../utils/sheet-config";
 
 describe("buildFieldOptions", () => {
   it("includes sheet headers even when there are no data rows", () => {
@@ -167,7 +167,7 @@ describe("status color fallback", () => {
 
     expect(metrics?.status).toBe("Fazendo");
     expect(metrics?.colors.bg).toBe("bg-yellow-200 dark:bg-yellow-600");
-    expect(metrics?.customColors).toEqual({ bg: "", border: "" });
+    expect(metrics?.customColors).toBeUndefined();
   });
 
   it("uses custom colors for explicit status values when a status column is selected", () => {
@@ -192,6 +192,8 @@ describe("status color fallback", () => {
     });
 
     expect(metrics?.status).toBe("Fazendo");
-    expect(metrics?.customColors).toEqual({ bg: "#123456", border: "#123456" });
+    expect(metrics?.customColors?.bg).toBe("#123456");
+    expect(metrics?.customColors?.darkBorder).toContain("#123456");
+    expect(metrics?.customColors?.lightBorder).toContain("#123456");
   });
 });

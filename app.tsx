@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { TabBar } from "./components/TabBar";
-import { TimelineTabView } from "./components/TimelineTabView";
+import { TabBar } from "./components/tab-bar";
+import { TimelineTabView } from "./components/timeline-tab-view";
 import {
   fetchWorkspace,
   getBootstrap,
   persistWorkspace,
-} from "./utils/sheetHost";
+} from "./utils/sheet-host";
 import {
   addTab,
   closeTab,
