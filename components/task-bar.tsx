@@ -32,7 +32,7 @@ export const TaskBar: React.FC<TaskBarProps> = ({
 
   return (
     <div
-      className="relative h-6 flex items-center"
+      className="relative h-6 flex items-center z-10"
       style={{ width: `${timelineData.totalDays * timelineData.daySize}px` }}
     >
       {/* Render overlays first so they appear on top due to stacking order and z-index */}
