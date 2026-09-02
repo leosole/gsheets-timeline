@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import dayjs from "dayjs";
 import { cn } from "../utils/cn";
 import type { Granularity, TimelineData } from "../utils/date-utils";
@@ -9,47 +9,56 @@ interface TimelineHeaderProps {
   daySize: number;
 }
 
-export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
+export const TimelineHeader: React.FC<TimelineHeaderProps> = React.memo(({
   timelineData,
   granularity,
   daySize,
 }) => {
-  const days = timelineData.days.map((day) => ({
-    ...day,
-    displayLabel:
-      granularity === "day"
-        ? dayjs(day.date).date().toString()
-        : granularity === "week"
-          ? dayjs(day.date).format("dd")
-          : dayjs(day.date).date().toString(),
-  }));
+  const days = useMemo(
+    () =>
+      timelineData.days.map((day) => ({
+        ...day,
+        displayLabel:
+          granularity === "day"
+            ? dayjs(day.date).date().toString()
+            : granularity === "week"
+              ? dayjs(day.date).format("dd")
+              : dayjs(day.date).date().toString(),
+      })),
+    [timelineData.days, granularity],
+  );
 
-  const months: { label: string; span: number }[] = [];
-  let currentMonth = "";
-  let currentSpan = 0;
-  days.forEach((day, index) => {
-    const monthLabel = dayjs(day.date).format("MMMM YYYY");
-    if (monthLabel !== currentMonth) {
-      if (currentMonth) months.push({ label: currentMonth, span: currentSpan });
-      currentMonth = monthLabel;
-      currentSpan = 1;
-    } else {
-      currentSpan++;
-    }
-    if (index === days.length - 1) {
-      months.push({ label: currentMonth, span: currentSpan });
-    }
-  });
+  const months = useMemo(() => {
+    const result: { label: string; span: number }[] = [];
+    let currentMonth = "";
+    let currentSpan = 0;
+    days.forEach((day, index) => {
+      const monthLabel = dayjs(day.date).format("MMMM YYYY");
+      if (monthLabel !== currentMonth) {
+        if (currentMonth)
+          result.push({ label: currentMonth, span: currentSpan });
+        currentMonth = monthLabel;
+        currentSpan = 1;
+      } else {
+        currentSpan++;
+      }
+      if (index === days.length - 1) {
+        result.push({ label: currentMonth, span: currentSpan });
+      }
+    });
+    return result;
+  }, [days]);
 
-  const weeks: { label: string; span: number }[] = [];
-  if (granularity === "week") {
+  const weeks = useMemo(() => {
+    if (granularity !== "week") return [];
+    const result: { label: string; span: number }[] = [];
     let weekStart: dayjs.Dayjs | null = null;
     let weekDays = 0;
     days.forEach((day, index) => {
       const currentDay = dayjs(day.date);
       if (currentDay.day() === 1 || weekStart === null) {
         if (weekStart && weekDays > 0) {
-          weeks.push(formatWeek(weekStart, weekDays));
+          result.push(formatWeek(weekStart, weekDays));
         }
         weekStart = currentDay;
         weekDays = 1;
@@ -57,12 +66,13 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
         weekDays++;
       }
       if (index === days.length - 1 && weekStart) {
-        weeks.push(formatWeek(weekStart, weekDays));
+        result.push(formatWeek(weekStart, weekDays));
       }
     });
-  }
+    return result;
+  }, [days, granularity]);
 
-  const todayStr = dayjs().format("YYYY-MM-DD");
+  const todayStr = useMemo(() => dayjs().format("YYYY-MM-DD"), []);
 
   return (
     <div className="relative h-16 border-b border-border bg-muted/50">
@@ -138,7 +148,7 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
       </div>
     </div>
   );
-};
+});
 
 const formatWeek = (weekStart: dayjs.Dayjs, weekDays: number) => {
   const weekEnd = weekStart.add(weekDays - 1, "day");

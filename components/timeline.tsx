@@ -44,7 +44,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 }) => {
   const [filter, setFilter] = useState("");
   const [granularity, setGranularity] = useState<Granularity>("week");
-  const [mouseDatePx, setMouseDatePx] = useState<number | undefined>();
+  const mouseCursorRef = useRef<HTMLDivElement>(null);
   const [showCurrentDateBtn, setShowCurrentDateBtn] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -383,10 +383,18 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setMouseDatePx(e.clientX - rect.left);
+    const x = e.clientX - rect.left;
+    if (mouseCursorRef.current) {
+      mouseCursorRef.current.style.left = `${x}px`;
+      mouseCursorRef.current.style.display = "";
+    }
   }, []);
 
-  const handleMouseLeave = useCallback(() => setMouseDatePx(undefined), []);
+  const handleMouseLeave = useCallback(() => {
+    if (mouseCursorRef.current) {
+      mouseCursorRef.current.style.display = "none";
+    }
+  }, []);
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
@@ -597,16 +605,15 @@ export const Timeline: React.FC<TimelineProps> = ({
               />
             )}
 
-            {mouseDatePx !== undefined && (
-              <div
-                className="absolute z-0 w-px bg-secondary pointer-events-none"
-                style={{
-                  left: `${mouseDatePx}px`,
-                  top: `${64 + topSpacerHeight}px`,
-                  height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
-                }}
-              />
-            )}
+            <div
+              ref={mouseCursorRef}
+              className="absolute z-0 w-px bg-secondary pointer-events-none"
+              style={{
+                display: "none",
+                top: `${64 + topSpacerHeight}px`,
+                height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
+              }}
+            />
           </div>
         </div>
       </div>

@@ -31,7 +31,7 @@ const DEFAULT_STATUS_LABELS = [
   "Não iniciado",
 ];
 
-export const Legend: React.FC<LegendProps> = ({
+export const Legend: React.FC<LegendProps> = React.memo(({
   statusOptions = [],
   statusColors = {},
   hasCustomStatusField = false,
@@ -125,4 +125,4 @@ export const Legend: React.FC<LegendProps> = ({
       </div>
     </div>
   );
-};
+});
