@@ -73,8 +73,6 @@ export const Timeline: React.FC<TimelineProps> = ({
   const rowHeight = 40;
 
   const timelineScrollRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(0);
   const rafRef = useRef<number>(0);
 
   // Compute filter options from tasks (excluding metadata columns that should never be filters)
@@ -308,20 +306,8 @@ export const Timeline: React.FC<TimelineProps> = ({
     taskMatchesFilters,
   ]);
 
-  // Virtualization: only render visible rows to keep DOM small
-  const OVERSCAN = 8;
-  const virtualStart = Math.max(
-    0,
-    Math.floor(scrollTop / rowHeight) - OVERSCAN,
-  );
-  const visibleCount = Math.ceil(viewportHeight / rowHeight) + OVERSCAN * 2;
-  const virtualEnd = Math.min(
-    displayedTasks.length,
-    virtualStart + visibleCount,
-  );
-  const visibleTasks = displayedTasks.slice(virtualStart, virtualEnd);
-  const topSpacerHeight = virtualStart * rowHeight;
-  const bottomSpacerHeight = (displayedTasks.length - virtualEnd) * rowHeight;
+  // All displayed tasks are rendered directly; the scroll container
+  // handles native scrolling so no manual virtualization is needed.
 
   // Pre-compute bar metrics for all displayed tasks to avoid per-scroll dayjs allocations
   const metricsCache = useMemo(() => {
@@ -358,17 +344,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     }
   }, [currentDatePx, isCurrentDateVisible]);
 
-  // ResizeObserver to track viewport height for virtualization
-  useEffect(() => {
-    const el = timelineScrollRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      setViewportHeight(entry.contentRect.height);
-    });
-    observer.observe(el);
-    setViewportHeight(el.clientHeight);
-    return () => observer.disconnect();
-  }, []);
+
 
   // Cleanup rAF on unmount
   useEffect(() => {
@@ -383,8 +359,6 @@ export const Timeline: React.FC<TimelineProps> = ({
     rafRef.current = requestAnimationFrame(() => {
       const c = timelineScrollRef.current;
       if (!c) return;
-      // Vertical scroll for virtualization
-      setScrollTop(c.scrollTop);
       // Horizontal: show/hide scroll-to-today button
       if (isCurrentDateVisible) {
         const scrollLeft = c.scrollLeft;
@@ -467,7 +441,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           className="grid"
           style={{
             width: `max(100%, ${288 + timelineData.totalDays * daySize}px)`,
-            gridTemplateRows: `64px ${displayedTasks.length * rowHeight}px`,
+            height: `${64 + displayedTasks.length * rowHeight}px`,
             gridTemplateColumns: `288px ${timelineData.totalDays * daySize}px`,
           }}
         >
@@ -526,8 +500,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
           {/* ── [1,0] Sidebar body — sticks to left ───────────────── */}
           <div className="sticky left-0 z-30 border-r border-border bg-background overflow-hidden">
-            <div style={{ height: `${topSpacerHeight}px` }} />
-            {visibleTasks.map((task) => (
+            {displayedTasks.map((task) => (
               <div
                 key={task.__sheetRow ?? "row"}
                 className="h-10 flex items-center px-4 text-sm hover:bg-muted/30 cursor-pointer border-b border-border"
@@ -582,7 +555,6 @@ export const Timeline: React.FC<TimelineProps> = ({
                 })()}
               </div>
             ))}
-            <div style={{ height: `${bottomSpacerHeight}px` }} />
             {displayedTasks.length === 0 && (
               <div className="p-4 text-center text-sm text-muted-foreground italic">
                 Nenhuma tarefa encontrada
@@ -596,8 +568,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
-            <div style={{ height: `${topSpacerHeight}px` }} />
-            {visibleTasks.map((task, i) => (
+            {displayedTasks.map((task, i) => (
               <div
                 key={task.__sheetRow ?? "row"}
                 className="h-10 relative hover:bg-muted/30 flex items-center border-b border-border"
@@ -609,18 +580,17 @@ export const Timeline: React.FC<TimelineProps> = ({
                   onSelect={setSelectedTask}
                   statusField={statusField}
                   statusColors={statusColors}
-                  metrics={metricsCache.get(virtualStart + i)}
+                  metrics={metricsCache.get(i)}
                 />
               </div>
             ))}
-            <div style={{ height: `${bottomSpacerHeight}px` }} />
 
             {isCurrentDateVisible && (
               <div
                 className="absolute z-0 w-0.5 bg-timeline-today pointer-events-none"
                 style={{
                   left: `${currentDatePx}px`,
-                  top: `${topSpacerHeight}px`,
+                  top: 0,
                   height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
                 }}
               />
@@ -631,7 +601,7 @@ export const Timeline: React.FC<TimelineProps> = ({
               className="absolute z-0 w-px bg-secondary pointer-events-none"
               style={{
                 display: "none",
-                top: `${topSpacerHeight}px`,
+                top: 0,
                 height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
               }}
             />
