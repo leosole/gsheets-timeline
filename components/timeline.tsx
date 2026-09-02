@@ -75,6 +75,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const rafRef = useRef<number>(0);
 
   // Compute filter options from tasks (excluding metadata columns that should never be filters)
   const filterOptions = useMemo(() => {
@@ -264,8 +265,10 @@ export const Timeline: React.FC<TimelineProps> = ({
   }, [collapsedParents, matchingChildParentRows]);
 
   const displayedTasks = useMemo(() => {
+    const hasDate = (t: any) => Boolean(t.start);
+
     if (hasGroupedRows) {
-      return tasks.filter((task) => {
+      const result = tasks.filter((task) => {
         const rowParent =
           typeof task.__groupParentRow === "number"
             ? task.__groupParentRow
@@ -281,15 +284,16 @@ export const Timeline: React.FC<TimelineProps> = ({
         const hasChildren = rowNumber >= 0 && groupedParentRows.has(rowNumber);
 
         if (!hasChildren) {
-          return taskMatchesFilters(task);
+          return hasDate(task) && taskMatchesFilters(task);
         }
 
         if (taskMatchesFilters(task)) return true;
         return rowNumber >= 0 && matchingChildParentRows.has(rowNumber);
       });
+      return result;
     }
     return tasks
-      .filter(taskMatchesFilters)
+      .filter((t) => hasDate(t) && taskMatchesFilters(t))
       .sort(
         (a, b) =>
           (a.start ? parseInt(a.start.replace(/\//g, "")) : 0) -
@@ -348,22 +352,33 @@ export const Timeline: React.FC<TimelineProps> = ({
     return () => observer.disconnect();
   }, []);
 
+  // Cleanup rAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   const handleScroll = useCallback(() => {
-    const c = timelineScrollRef.current;
-    if (!c) return;
-    // Vertical scroll for virtualization
-    setScrollTop(c.scrollTop);
-    // Horizontal: show/hide scroll-to-today button
-    if (isCurrentDateVisible) {
-      const scrollLeft = c.scrollLeft;
-      const visLeft = currentDatePx - timelineData.daySize * 2;
-      const visRight = currentDatePx + timelineData.daySize * 2;
-      setShowCurrentDateBtn(
-        !(scrollLeft <= visLeft && scrollLeft + c.clientWidth >= visRight),
-      );
-    } else {
-      setShowCurrentDateBtn(false);
-    }
+    // Cancel any pending rAF to avoid stacking updates
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const c = timelineScrollRef.current;
+      if (!c) return;
+      // Vertical scroll for virtualization
+      setScrollTop(c.scrollTop);
+      // Horizontal: show/hide scroll-to-today button
+      if (isCurrentDateVisible) {
+        const scrollLeft = c.scrollLeft;
+        const visLeft = currentDatePx - timelineData.daySize * 2;
+        const visRight = currentDatePx + timelineData.daySize * 2;
+        setShowCurrentDateBtn(
+          !(scrollLeft <= visLeft && scrollLeft + c.clientWidth >= visRight),
+        );
+      } else {
+        setShowCurrentDateBtn(false);
+      }
+    });
   }, [currentDatePx, isCurrentDateVisible, timelineData.daySize]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {

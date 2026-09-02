@@ -30,24 +30,27 @@ export const getDaySize = (granularity: Granularity): number => {
 }
 
 export const calculateDateRange = (tasks: any[]) => {
-  const dates = tasks
-    .flatMap(t => [t.start, t.end, t.due].filter(Boolean))
-    .map(d => parseDate(d as string))
-    .filter((d): d is dayjs.Dayjs => d !== null && d.isValid())
-
   const now = dayjs()
+  let minDate: dayjs.Dayjs | null = null
+  let maxDate: dayjs.Dayjs | null = null
 
-  if (dates.length === 0) {
+  for (let i = 0; i < tasks.length; i++) {
+    const t = tasks[i]
+    const rawDates = [t.start, t.end, t.due]
+    for (let j = 0; j < 3; j++) {
+      if (!rawDates[j]) continue
+      const d = parseDate(rawDates[j])
+      if (!d || !d.isValid()) continue
+      if (!minDate || d.isBefore(minDate)) minDate = d
+      if (!maxDate || d.isAfter(maxDate)) maxDate = d
+    }
+  }
+
+  if (!minDate || !maxDate) {
     return { start: now.subtract(30, 'day'), end: now.add(30, 'day') }
   }
 
-  const minDate = dayjs.min(...dates) || now
-  const maxDate = dayjs.max(...dates) || now
-
-  const start = minDate.subtract(5, 'days')
-  const end = maxDate.add(5, 'days')
-
-  return { start, end }
+  return { start: minDate.subtract(5, 'days'), end: maxDate.add(5, 'days') }
 }
 
 export const generateTimelineData = (
@@ -55,21 +58,25 @@ export const generateTimelineData = (
   granularity: Granularity
 ): TimelineData => {
   const daySize = getDaySize(granularity)
-  const days = []
+  const days: TimelineData['days'] = []
   let current = dateRange.start.startOf('day')
 
   while (current.isBefore(dateRange.end) || current.isSame(dateRange.end, 'day')) {
+    const date = current.format('YYYY-MM-DD')
+    const dayLabel = current.format('DD')
     days.push({
-      date: current.format('YYYY-MM-DD'),
-      dayLabel: current.format('DD'),
-      weekLabel: current.format('ddd DD/MM'),
-      monthLabel: current.format('MMMM')
+      date,
+      dayLabel,
+      weekLabel: granularity === 'week' ? current.format('ddd DD/MM') : undefined,
+      monthLabel: granularity === 'month' ? current.format('MMMM') : undefined,
     })
     current = current.add(1, 'day')
   }
 
   const dayIndex = new Map<string, number>();
-  days.forEach((d, i) => { dayIndex.set(d.date, i); })
+  for (let i = 0; i < days.length; i++) {
+    dayIndex.set(days[i].date, i);
+  }
 
   return { days, startDate: dateRange.start, endDate: dateRange.end, daySize, totalDays: days.length, dayIndex }
 }
