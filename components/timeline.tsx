@@ -467,7 +467,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           className="grid"
           style={{
             width: `max(100%, ${288 + timelineData.totalDays * daySize}px)`,
-            height: `${64 + displayedTasks.length * rowHeight}px`,
+            gridTemplateRows: `64px ${displayedTasks.length * rowHeight}px`,
             gridTemplateColumns: `288px ${timelineData.totalDays * daySize}px`,
           }}
         >
