@@ -438,182 +438,189 @@ export const Timeline: React.FC<TimelineProps> = ({
         className="relative min-h-0 flex-1 overflow-auto"
         onScroll={handleScroll}
       >
-        {/* Sticky header row — stays at top of scroll container */}
-        <div className="sticky top-0 z-100 flex" style={{ height: "64px" }}>
-          {/* Sidebar header */}
-          <div className="sticky left-0 z-30 w-72 shrink-0 h-16 border-b border-border bg-muted flex items-center justify-between px-4">
-            <span className="font-semibold text-sm text-foreground">
-              Tarefas
-            </span>
-            {hasGroupedRows ? (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setCollapsedParents(new Set())}
-                  className="cursor-pointer rounded-lg p-2 text-muted-foreground hover:bg-muted"
-                  title="Expand all"
-                  aria-label="Expand all"
-                >
-                  <BiExpandVertical />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCollapsedParents(new Set(groupedParentRows))
-                  }
-                  className="cursor-pointer rounded-lg p-2 text-muted-foreground hover:bg-muted"
-                  title="Collapse all"
-                  aria-label="Collapse all"
-                >
-                  <BiCollapseVertical />
-                </button>
-              </div>
-            ) : null}
-          </div>
-          {/* Timeline header */}
-          <div
-            className="relative shrink-0 bg-muted"
-            style={{ width: `${timelineData.totalDays * daySize}px` }}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-          >
-            <TimelineHeader
-              timelineData={timelineData}
-              granularity={granularity}
-              daySize={daySize}
-            />
-            {isCurrentDateVisible &&
-              (granularity === "week" || granularity === "month") && (
-                <div
-                  className="absolute z-30 flex h-5 w-5 items-center justify-center rounded-full bg-timeline-today text-xs font-bold text-white pointer-events-none"
-                  style={{ left: `${currentDatePx - 10}px`, top: "50px" }}
-                >
-                  {dayjs().date()}
-                </div>
-              )}
-          </div>
-        </div>
-
-        {/* Virtualized body row */}
+        {/*
+          Two-row layout:
+          - Header row: sidebar-header (sticky top+left) + timeline-header (sticky top)
+          - Body row: sidebar-body (sticky left) + timeline-body (scrolls freely)
+          Both rows share the same total width so columns stay aligned.
+        */}
         <div
-          className="flex"
           style={{
             width: `max(100%, ${288 + timelineData.totalDays * daySize}px)`,
           }}
         >
-          {/* Sidebar (frozen first column) */}
-          <div className="sticky left-0 z-30 w-72 shrink-0 border-r border-border bg-background">
-            <div style={{ height: `${topSpacerHeight}px` }} />
-            {visibleTasks.map((task) => (
-              <div
-                key={task.__sheetRow ?? "row"}
-                className="h-10 flex items-center px-4 text-sm hover:bg-muted/30 cursor-pointer border-b border-border"
-                onClick={() => setSelectedTask(task)}
-              >
-                {(() => {
-                  const rowNumber =
-                    typeof task.__sheetRow === "number" ? task.__sheetRow : -1;
-                  const isChild = typeof task.__groupParentRow === "number";
-                  const hasChildren =
-                    rowNumber >= 0 && groupedParentRows.has(rowNumber);
-                  const isCollapsed =
-                    rowNumber >= 0 && effectiveCollapsedParents.has(rowNumber);
-
-                  return (
-                    <div className="flex min-w-0 items-center">
-                      {hasChildren ? (
-                        <button
-                          type="button"
-                          className="mr-1 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-muted/60"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setCollapsedParents((previous) => {
-                              const next = new Set(previous);
-                              if (next.has(rowNumber)) {
-                                next.delete(rowNumber);
-                              } else {
-                                next.add(rowNumber);
-                              }
-                              return next;
-                            });
-                          }}
-                          aria-label={
-                            isCollapsed ? "Expandir grupo" : "Recolher grupo"
-                          }
-                        >
-                          <PiCaretDownBold
-                            className={cn(
-                              "transition-transform duration-200",
-                              isCollapsed ? "rotate-0" : "rotate-180",
-                            )}
-                          />
-                        </button>
-                      ) : (
-                        <span className="mr-1 inline-block h-5 w-5 shrink-0" />
-                      )}
-                      <span className={cn("truncate", isChild && "ml-3")}>
-                        {task.name}
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-            ))}
-            <div style={{ height: `${bottomSpacerHeight}px` }} />
-            {displayedTasks.length === 0 && (
-              <div className="p-4 text-center text-sm text-muted-foreground italic">
-                Nenhuma tarefa encontrada
-              </div>
-            )}
+          {/* ── Header row ────────────────────────────────────────── */}
+          <div className="flex" style={{ height: "64px" }}>
+            {/* Sidebar header — sticks to top-left corner */}
+            <div className="sticky top-0 left-0 z-50 w-72 shrink-0 h-16 border-b border-border bg-muted flex items-center justify-between px-4">
+              <span className="font-semibold text-sm text-foreground">
+                Tarefas
+              </span>
+              {hasGroupedRows ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCollapsedParents(new Set())}
+                    className="cursor-pointer rounded-lg p-2 text-muted-foreground hover:bg-muted"
+                    title="Expand all"
+                    aria-label="Expand all"
+                  >
+                    <BiExpandVertical />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCollapsedParents(new Set(groupedParentRows))
+                    }
+                    className="cursor-pointer rounded-lg p-2 text-muted-foreground hover:bg-muted"
+                    title="Collapse all"
+                    aria-label="Collapse all"
+                  >
+                    <BiCollapseVertical />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            {/* Timeline header — sticks to top */}
+            <div
+              className="sticky top-0 z-40 shrink-0 bg-muted"
+              style={{ width: `${timelineData.totalDays * daySize}px` }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
+              <TimelineHeader
+                timelineData={timelineData}
+                granularity={granularity}
+                daySize={daySize}
+              />
+              {isCurrentDateVisible &&
+                (granularity === "week" || granularity === "month") && (
+                  <div
+                    className="absolute z-30 flex h-5 w-5 items-center justify-center rounded-full bg-timeline-today text-xs font-bold text-white pointer-events-none"
+                    style={{ left: `${currentDatePx - 10}px`, top: "50px" }}
+                  >
+                    {dayjs().date()}
+                  </div>
+                )}
+            </div>
           </div>
 
-          {/* Timeline area (virtualized rows) */}
-          <div
-            className="relative shrink-0"
-            style={{
-              width: `${timelineData.totalDays * daySize}px`,
-            }}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-          >
-            <div style={{ height: `${topSpacerHeight}px` }} />
-            {visibleTasks.map((task) => (
-              <div
-                key={task.__sheetRow ?? "row"}
-                className="h-10 relative hover:bg-muted/30 flex items-center border-b border-border"
-              >
-                <TaskBar
-                  task={task}
-                  timelineData={timelineData}
-                  granularity={granularity}
-                  onSelect={setSelectedTask}
-                  statusField={statusField}
-                  statusColors={statusColors}
-                />
-              </div>
-            ))}
-            <div style={{ height: `${bottomSpacerHeight}px` }} />
+          {/* ── Body row ──────────────────────────────────────────── */}
+          <div className="flex">
+            {/* Sidebar body — sticks to left */}
+            <div className="sticky left-0 z-30 w-72 shrink-0 border-r border-border bg-background">
+              <div style={{ height: `${topSpacerHeight}px` }} />
+              {visibleTasks.map((task) => (
+                <div
+                  key={task.__sheetRow ?? "row"}
+                  className="h-10 flex items-center px-4 text-sm hover:bg-muted/30 cursor-pointer border-b border-border"
+                  onClick={() => setSelectedTask(task)}
+                >
+                  {(() => {
+                    const rowNumber =
+                      typeof task.__sheetRow === "number" ? task.__sheetRow : -1;
+                    const isChild = typeof task.__groupParentRow === "number";
+                    const hasChildren =
+                      rowNumber >= 0 && groupedParentRows.has(rowNumber);
+                    const isCollapsed =
+                      rowNumber >= 0 && effectiveCollapsedParents.has(rowNumber);
 
-            {isCurrentDateVisible && (
+                    return (
+                      <div className="flex min-w-0 items-center">
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            className="mr-1 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-muted/60"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setCollapsedParents((previous) => {
+                                const next = new Set(previous);
+                                if (next.has(rowNumber)) {
+                                  next.delete(rowNumber);
+                                } else {
+                                  next.add(rowNumber);
+                                }
+                                return next;
+                              });
+                            }}
+                            aria-label={
+                              isCollapsed ? "Expandir grupo" : "Recolher grupo"
+                            }
+                          >
+                            <PiCaretDownBold
+                              className={cn(
+                                "transition-transform duration-200",
+                                isCollapsed ? "rotate-0" : "rotate-180",
+                              )}
+                            />
+                          </button>
+                        ) : (
+                          <span className="mr-1 inline-block h-5 w-5 shrink-0" />
+                        )}
+                        <span className={cn("truncate", isChild && "ml-3")}>
+                          {task.name}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ))}
+              <div style={{ height: `${bottomSpacerHeight}px` }} />
+              {displayedTasks.length === 0 && (
+                <div className="p-4 text-center text-sm text-muted-foreground italic">
+                  Nenhuma tarefa encontrada
+                </div>
+              )}
+            </div>
+
+            {/* Timeline body — scrolls freely in both directions */}
+            <div
+              className="relative shrink-0"
+              style={{
+                width: `${timelineData.totalDays * daySize}px`,
+              }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
+              <div style={{ height: `${topSpacerHeight}px` }} />
+              {visibleTasks.map((task) => (
+                <div
+                  key={task.__sheetRow ?? "row"}
+                  className="h-10 relative hover:bg-muted/30 flex items-center border-b border-border"
+                >
+                  <TaskBar
+                    task={task}
+                    timelineData={timelineData}
+                    granularity={granularity}
+                    onSelect={setSelectedTask}
+                    statusField={statusField}
+                    statusColors={statusColors}
+                  />
+                </div>
+              ))}
+              <div style={{ height: `${bottomSpacerHeight}px` }} />
+
+              {isCurrentDateVisible && (
+                <div
+                  className="absolute z-0 w-0.5 bg-timeline-today pointer-events-none"
+                  style={{
+                    left: `${currentDatePx}px`,
+                    top: `${topSpacerHeight}px`,
+                    height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
+                  }}
+                />
+              )}
+
               <div
-                className="absolute z-0 w-0.5 bg-timeline-today pointer-events-none"
+                ref={mouseCursorRef}
+                className="absolute z-0 w-px bg-secondary pointer-events-none"
                 style={{
-                  left: `${currentDatePx}px`,
-                  top: `${64 + topSpacerHeight}px`,
+                  display: "none",
+                  top: `${topSpacerHeight}px`,
                   height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
                 }}
               />
-            )}
-
-            <div
-              ref={mouseCursorRef}
-              className="absolute z-0 w-px bg-secondary pointer-events-none"
-              style={{
-                display: "none",
-                top: `${64 + topSpacerHeight}px`,
-                height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
-              }}
-            />
+            </div>
           </div>
         </div>
       </div>
