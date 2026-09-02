@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import type { Granularity } from "../utils/date-utils";
 import { Button, Select, StatusPill, TextInput, ToggleGroup } from "./ui";
 
@@ -17,7 +17,7 @@ interface ControlsProps {
   statusOptions: string[];
 }
 
-export const Controls: React.FC<ControlsProps> = ({
+export const Controls: React.FC<ControlsProps> = React.memo(({
   filter,
   onFilterChange,
   granularity,
@@ -31,13 +31,16 @@ export const Controls: React.FC<ControlsProps> = ({
   filterOptions,
   statusOptions,
 }) => {
-  const toggleStatus = (s: string) => {
-    if (statusFilter.includes(s)) {
-      onStatusFilterChange(statusFilter.filter((x) => x !== s));
-    } else {
-      onStatusFilterChange([...statusFilter, s]);
-    }
-  };
+  const toggleStatus = useCallback(
+    (s: string) => {
+      if (statusFilter.includes(s)) {
+        onStatusFilterChange(statusFilter.filter((x) => x !== s));
+      } else {
+        onStatusFilterChange([...statusFilter, s]);
+      }
+    },
+    [statusFilter, onStatusFilterChange],
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 bg-card border-b border-border">
@@ -98,4 +101,4 @@ export const Controls: React.FC<ControlsProps> = ({
       )}
     </div>
   );
-};
+});

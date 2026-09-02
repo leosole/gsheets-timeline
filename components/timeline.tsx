@@ -18,10 +18,15 @@ import {
   getCurrentDatePosition,
   getDaySize,
 } from "../utils/date-utils";
-import { getTaskStatuses } from "../utils/bar-metrics";
+import {
+  calculateBarMetrics,
+  getTaskStatuses,
+  type BarMetrics,
+} from "../utils/bar-metrics";
 import type { Granularity } from "../utils/date-utils";
 import { BiCollapseVertical, BiExpandVertical } from "react-icons/bi";
-import { PiCaretDownBold } from "react-icons/pi";
+import { PiCaretDownBold, PiClock } from "react-icons/pi";
+import { FaExternalLinkAlt } from "react-icons/fa";
 
 interface TimelineProps {
   tasks: any[];
@@ -44,7 +49,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 }) => {
   const [filter, setFilter] = useState("");
   const [granularity, setGranularity] = useState<Granularity>("week");
-  const [mouseDatePx, setMouseDatePx] = useState<number | undefined>();
+  const mouseCursorRef = useRef<HTMLDivElement>(null);
   const [showCurrentDateBtn, setShowCurrentDateBtn] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -73,8 +78,6 @@ export const Timeline: React.FC<TimelineProps> = ({
   const rowHeight = 40;
 
   const timelineScrollRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(0);
   const rafRef = useRef<number>(0);
 
   // Compute filter options from tasks (excluding metadata columns that should never be filters)
@@ -308,20 +311,26 @@ export const Timeline: React.FC<TimelineProps> = ({
     taskMatchesFilters,
   ]);
 
-  // Virtualization: only render visible rows to keep DOM small
-  const OVERSCAN = 8;
-  const virtualStart = Math.max(
-    0,
-    Math.floor(scrollTop / rowHeight) - OVERSCAN,
-  );
-  const visibleCount = Math.ceil(viewportHeight / rowHeight) + OVERSCAN * 2;
-  const virtualEnd = Math.min(
-    displayedTasks.length,
-    virtualStart + visibleCount,
-  );
-  const visibleTasks = displayedTasks.slice(virtualStart, virtualEnd);
-  const topSpacerHeight = virtualStart * rowHeight;
-  const bottomSpacerHeight = (displayedTasks.length - virtualEnd) * rowHeight;
+  // All displayed tasks are rendered directly; the scroll container
+  // handles native scrolling so no manual virtualization is needed.
+
+  // Pre-compute bar metrics for all displayed tasks to avoid per-scroll dayjs allocations
+  const metricsCache = useMemo(() => {
+    const cache = new Map<number, BarMetrics | null>();
+    displayedTasks.forEach((task, i) => {
+      cache.set(
+        i,
+        calculateBarMetrics(
+          task,
+          timelineData,
+          granularity,
+          statusField,
+          statusColors,
+        ),
+      );
+    });
+    return cache;
+  }, [displayedTasks, timelineData, granularity, statusField, statusColors]);
 
   // Scroll to current date on mount
   useEffect(() => {
@@ -340,16 +349,13 @@ export const Timeline: React.FC<TimelineProps> = ({
     }
   }, [currentDatePx, isCurrentDateVisible]);
 
-  // ResizeObserver to track viewport height for virtualization
+
+
+  // Cleanup rAF on unmount
   useEffect(() => {
-    const el = timelineScrollRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      setViewportHeight(entry.contentRect.height);
-    });
-    observer.observe(el);
-    setViewportHeight(el.clientHeight);
-    return () => observer.disconnect();
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, []);
 
   // Cleanup rAF on unmount
@@ -365,8 +371,6 @@ export const Timeline: React.FC<TimelineProps> = ({
     rafRef.current = requestAnimationFrame(() => {
       const c = timelineScrollRef.current;
       if (!c) return;
-      // Vertical scroll for virtualization
-      setScrollTop(c.scrollTop);
       // Horizontal: show/hide scroll-to-today button
       if (isCurrentDateVisible) {
         const scrollLeft = c.scrollLeft;
@@ -383,10 +387,18 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setMouseDatePx(e.clientX - rect.left);
+    const x = e.clientX - rect.left;
+    if (mouseCursorRef.current) {
+      mouseCursorRef.current.style.left = `${x}px`;
+      mouseCursorRef.current.style.display = "";
+    }
   }, []);
 
-  const handleMouseLeave = useCallback(() => setMouseDatePx(undefined), []);
+  const handleMouseLeave = useCallback(() => {
+    if (mouseCursorRef.current) {
+      mouseCursorRef.current.style.display = "none";
+    }
+  }, []);
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
@@ -397,15 +409,15 @@ export const Timeline: React.FC<TimelineProps> = ({
               href={sheetUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xl font-bold hover:underline"
+              className="text-xl font-bold hover:underline flex items-center align-middle gap-2"
             >
-              {title}
+              {title} <FaExternalLinkAlt size={12} />
             </a>
           ) : (
             <h1 className="text-xl font-bold">{title}</h1>
           )}
-          <p className="text-xs text-muted-foreground mt-1">
-            Gerado: {generatedAt}
+          <p className="text-xs text-muted-foreground mt-1 flex gap-1 items-center align-middle">
+            <PiClock size={12} /> {generatedAt}
           </p>
         </div>
       </header>
@@ -430,10 +442,23 @@ export const Timeline: React.FC<TimelineProps> = ({
         className="relative min-h-0 flex-1 overflow-auto"
         onScroll={handleScroll}
       >
-        {/* Sticky header row — stays at top of scroll container */}
-        <div className="sticky top-0 z-100 flex" style={{ height: "64px" }}>
-          {/* Sidebar header */}
-          <div className="sticky left-0 z-30 w-72 shrink-0 h-16 border-b border-border bg-muted flex items-center justify-between px-4">
+        {/*
+          CSS Grid frozen-pane layout:
+          - [0,0] Sidebar header: sticky top+left (frozen corner)
+          - [0,1] Timeline header: sticky top (scrolls horizontally)
+          - [1,0] Sidebar body: sticky left (scrolls vertically)
+          - [1,1] Timeline body: scrolls freely in both directions
+        */}
+        <div
+          className="grid"
+          style={{
+            width: `max(100%, ${288 + timelineData.totalDays * daySize}px)`,
+            height: `${64 + displayedTasks.length * rowHeight}px`,
+            gridTemplateColumns: `288px ${timelineData.totalDays * daySize}px`,
+          }}
+        >
+          {/* ── [0,0] Sidebar header — frozen corner ─────────────── */}
+          <div className="sticky top-0 left-0 z-50 h-16 border-b border-border bg-muted flex items-center justify-between px-4">
             <span className="font-semibold text-sm text-foreground">
               Tarefas
             </span>
@@ -462,10 +487,10 @@ export const Timeline: React.FC<TimelineProps> = ({
               </div>
             ) : null}
           </div>
-          {/* Timeline header */}
+
+          {/* ── [0,1] Timeline header — sticks to top ─────────────── */}
           <div
-            className="relative shrink-0 bg-muted"
-            style={{ width: `${timelineData.totalDays * daySize}px` }}
+            className="sticky top-0 z-40 bg-muted border-b border-border"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
@@ -484,19 +509,10 @@ export const Timeline: React.FC<TimelineProps> = ({
                 </div>
               )}
           </div>
-        </div>
 
-        {/* Virtualized body row */}
-        <div
-          className="flex"
-          style={{
-            width: `max(100%, ${288 + timelineData.totalDays * daySize}px)`,
-          }}
-        >
-          {/* Sidebar (frozen first column) */}
-          <div className="sticky left-0 z-30 w-72 shrink-0 border-r border-border bg-background">
-            <div style={{ height: `${topSpacerHeight}px` }} />
-            {visibleTasks.map((task) => (
+          {/* ── [1,0] Sidebar body — sticks to left ───────────────── */}
+          <div className="sticky left-0 z-30 border-r border-border bg-background overflow-hidden">
+            {displayedTasks.map((task) => (
               <div
                 key={task.__sheetRow ?? "row"}
                 className="h-10 flex items-center px-4 text-sm hover:bg-muted/30 cursor-pointer border-b border-border"
@@ -551,7 +567,6 @@ export const Timeline: React.FC<TimelineProps> = ({
                 })()}
               </div>
             ))}
-            <div style={{ height: `${bottomSpacerHeight}px` }} />
             {displayedTasks.length === 0 && (
               <div className="p-4 text-center text-sm text-muted-foreground italic">
                 Nenhuma tarefa encontrada
@@ -559,17 +574,13 @@ export const Timeline: React.FC<TimelineProps> = ({
             )}
           </div>
 
-          {/* Timeline area (virtualized rows) */}
+          {/* ── [1,1] Timeline body — scrolls freely ──────────────── */}
           <div
-            className="relative shrink-0"
-            style={{
-              width: `${timelineData.totalDays * daySize}px`,
-            }}
+            className="relative"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
-            <div style={{ height: `${topSpacerHeight}px` }} />
-            {visibleTasks.map((task) => (
+            {displayedTasks.map((task, i) => (
               <div
                 key={task.__sheetRow ?? "row"}
                 className="h-10 relative hover:bg-muted/30 flex items-center border-b border-border"
@@ -581,32 +592,31 @@ export const Timeline: React.FC<TimelineProps> = ({
                   onSelect={setSelectedTask}
                   statusField={statusField}
                   statusColors={statusColors}
+                  metrics={metricsCache.get(i)}
                 />
               </div>
             ))}
-            <div style={{ height: `${bottomSpacerHeight}px` }} />
 
             {isCurrentDateVisible && (
               <div
                 className="absolute z-0 w-0.5 bg-timeline-today pointer-events-none"
                 style={{
                   left: `${currentDatePx}px`,
-                  top: `${64 + topSpacerHeight}px`,
+                  top: 0,
                   height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
                 }}
               />
             )}
 
-            {mouseDatePx !== undefined && (
-              <div
-                className="absolute z-0 w-px bg-secondary pointer-events-none"
-                style={{
-                  left: `${mouseDatePx}px`,
-                  top: `${64 + topSpacerHeight}px`,
-                  height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
-                }}
-              />
-            )}
+            <div
+              ref={mouseCursorRef}
+              className="absolute z-0 w-px bg-secondary pointer-events-none"
+              style={{
+                display: "none",
+                top: 0,
+                height: `${Math.max(displayedTasks.length * rowHeight, 24)}px`,
+              }}
+            />
           </div>
         </div>
       </div>

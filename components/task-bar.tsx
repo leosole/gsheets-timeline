@@ -1,5 +1,5 @@
 import React from "react";
-import { calculateBarMetrics } from "../utils/bar-metrics";
+import { calculateBarMetrics, type BarMetrics } from "../utils/bar-metrics";
 import { cn } from "../utils/cn";
 import type { TimelineData, Granularity } from "../utils/date-utils";
 
@@ -10,6 +10,7 @@ interface TaskBarProps {
   onSelect?: (task: any) => void;
   statusField?: string;
   statusColors?: Record<string, string>;
+  metrics?: BarMetrics | null;
 }
 
 export const TaskBar: React.FC<TaskBarProps> = React.memo(({
@@ -19,14 +20,17 @@ export const TaskBar: React.FC<TaskBarProps> = React.memo(({
   onSelect,
   statusField,
   statusColors = {},
+  metrics: precomputedMetrics,
 }) => {
-  const metrics = calculateBarMetrics(
-    task,
-    timelineData,
-    granularity,
-    statusField,
-    statusColors,
-  );
+  const metrics =
+    precomputedMetrics ??
+    calculateBarMetrics(
+      task,
+      timelineData,
+      granularity,
+      statusField,
+      statusColors,
+    );
 
   if (!metrics) return null;
 
