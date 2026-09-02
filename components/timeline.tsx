@@ -18,10 +18,15 @@ import {
   getCurrentDatePosition,
   getDaySize,
 } from "../utils/date-utils";
-import { calculateBarMetrics, getTaskStatuses, type BarMetrics } from "../utils/bar-metrics";
+import {
+  calculateBarMetrics,
+  getTaskStatuses,
+  type BarMetrics,
+} from "../utils/bar-metrics";
 import type { Granularity } from "../utils/date-utils";
 import { BiCollapseVertical, BiExpandVertical } from "react-icons/bi";
-import { PiCaretDownBold } from "react-icons/pi";
+import { PiCaretDownBold, PiClock } from "react-icons/pi";
+import { FaExternalLinkAlt } from "react-icons/fa";
 
 interface TimelineProps {
   tasks: any[];
@@ -397,15 +402,15 @@ export const Timeline: React.FC<TimelineProps> = ({
               href={sheetUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xl font-bold hover:underline"
+              className="text-xl font-bold hover:underline flex items-center align-middle gap-2"
             >
-              {title}
+              {title} <FaExternalLinkAlt size={12} />
             </a>
           ) : (
             <h1 className="text-xl font-bold">{title}</h1>
           )}
-          <p className="text-xs text-muted-foreground mt-1">
-            Gerado: {generatedAt}
+          <p className="text-xs text-muted-foreground mt-1 flex gap-1 items-center align-middle">
+            <PiClock size={12} /> {generatedAt}
           </p>
         </div>
       </header>
