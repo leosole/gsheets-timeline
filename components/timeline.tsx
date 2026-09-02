@@ -358,6 +358,13 @@ export const Timeline: React.FC<TimelineProps> = ({
     };
   }, []);
 
+  // Cleanup rAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   const handleScroll = useCallback(() => {
     // Cancel any pending rAF to avoid stacking updates
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
