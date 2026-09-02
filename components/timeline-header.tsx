@@ -9,7 +9,7 @@ interface TimelineHeaderProps {
   daySize: number;
 }
 
-export const TimelineHeader: React.FC<TimelineHeaderProps> = React.memo(({
+export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
   timelineData,
   granularity,
   daySize,
@@ -148,7 +148,7 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = React.memo(({
       </div>
     </div>
   );
-});
+};
 
 const formatWeek = (weekStart: dayjs.Dayjs, weekDays: number) => {
   const weekEnd = weekStart.add(weekDays - 1, "day");

@@ -450,7 +450,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           }}
         >
           {/* ── Header row ────────────────────────────────────────── */}
-          <div className="flex" style={{ height: "64px" }}>
+          <div className="sticky top-0 z-50 flex" style={{ height: "64px" }}>
             {/* Sidebar header — sticks to top-left corner */}
             <div className="sticky top-0 left-0 z-50 w-72 shrink-0 h-16 border-b border-border bg-muted flex items-center justify-between px-4">
               <span className="font-semibold text-sm text-foreground">
@@ -506,7 +506,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           </div>
 
           {/* ── Body row ──────────────────────────────────────────── */}
-          <div className="flex">
+          <div className="flex" style={{ height: `${displayedTasks.length * rowHeight}px` }}>
             {/* Sidebar body — sticks to left */}
             <div className="sticky left-0 z-30 w-72 shrink-0 border-r border-border bg-background">
               <div style={{ height: `${topSpacerHeight}px` }} />
