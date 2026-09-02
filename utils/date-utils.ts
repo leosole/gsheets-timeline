@@ -17,6 +17,8 @@ export interface TimelineData {
   endDate: dayjs.Dayjs
   daySize: number
   totalDays: number
+  /** Precomputed index for O(1) date→dayIndex lookups */
+  dayIndex: Map<string, number>
 }
 
 export const getDaySize = (granularity: Granularity): number => {
@@ -66,13 +68,16 @@ export const generateTimelineData = (
     current = current.add(1, 'day')
   }
 
-  return { days, startDate: dateRange.start, endDate: dateRange.end, daySize, totalDays: days.length }
+  const dayIndex = new Map<string, number>();
+  days.forEach((d, i) => { dayIndex.set(d.date, i); })
+
+  return { days, startDate: dateRange.start, endDate: dateRange.end, daySize, totalDays: days.length, dayIndex }
 }
 
 export const getCurrentDatePosition = (timelineData: TimelineData): number => {
   const today = dayjs().format('YYYY-MM-DD')
-  const index = timelineData.days.findIndex(d => d.date === today)
-  if (index < 0) return -1
+  const index = timelineData.dayIndex.get(today)
+  if (index === undefined) return -1
   return index * timelineData.daySize + timelineData.daySize / 2
 }
 
@@ -96,7 +101,7 @@ export const formatDateToISO = (date: string | null | undefined): string | null 
 }
 
 export const calculateDatePosition = (date: string, timelineData: TimelineData): number => {
-  const index = timelineData.days.findIndex(d => d.date === date)
-  if (index < 0) return -1
+  const index = timelineData.dayIndex.get(date)
+  if (index === undefined) return -1
   return index * timelineData.daySize + timelineData.daySize / 2
 }

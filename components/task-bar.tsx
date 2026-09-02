@@ -12,7 +12,7 @@ interface TaskBarProps {
   statusColors?: Record<string, string>;
 }
 
-export const TaskBar: React.FC<TaskBarProps> = ({
+export const TaskBar: React.FC<TaskBarProps> = React.memo(({
   task,
   timelineData,
   granularity,
@@ -108,4 +108,4 @@ export const TaskBar: React.FC<TaskBarProps> = ({
       </button>
     </div>
   );
-};
+});
