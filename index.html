@@ -3,8 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <base target="_top" />
     <title>Timeline</title>
+    <script>
+      // Only set _top target when running inside Google Apps Script iframe
+      if (window.google?.script) {
+        document.head.insertAdjacentHTML('beforeend', '<base target="_top" />');
+      }
+    </script>
   </head>
   <body class="bg-background text-foreground">
     <div id="root"></div>

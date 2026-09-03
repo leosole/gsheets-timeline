@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "create": "npm run build && node scripts/prepare-sidebar.js",
+    "build:vercel": "tsc -b && BUILD_TARGET=vercel vite build",
+    "build:appsscript": "tsc -b && BUILD_TARGET=appsscript vite build",
+    "create": "npm run build:appsscript && node scripts/prepare-sidebar.js",
     "update": "npm run create && cd google-apps-script && clasp push --force && cd ..",
     "deploy": "cd google-apps-script && clasp deploy && cd ..",
     "preview": "vite preview",
