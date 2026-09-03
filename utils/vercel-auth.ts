@@ -255,7 +255,7 @@ export async function requestAccessToken(): Promise<string> {
     const tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: OAUTH_SCOPES,
-      callback: (tokenResponse: {
+      callback: async (tokenResponse: {
         access_token: string;
         expires_in: number;
         id_token?: string;
@@ -266,10 +266,28 @@ export async function requestAccessToken(): Promise<string> {
           return;
         }
 
-        // Extract email from the ID token (a JWT in the token response).
+        // Extract email: try ID token first, then fall back to userinfo API.
         let email: string | null = null;
         if (tokenResponse.id_token) {
           email = decodeIdTokenEmail(tokenResponse.id_token);
+        }
+        if (!email) {
+          try {
+            const res = await fetch(
+              "https://www.googleapis.com/oauth2/v3/userinfo",
+              {
+                headers: {
+                  Authorization: `Bearer ${tokenResponse.access_token}`,
+                },
+              },
+            );
+            if (res.ok) {
+              const data = await res.json();
+              email = data.email || null;
+            }
+          } catch {
+            // Best-effort; email may stay null.
+          }
         }
 
         storeToken(
