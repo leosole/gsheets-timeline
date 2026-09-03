@@ -353,7 +353,18 @@ export const fetchWorkspace = async (): Promise<string> => {
     } catch (cause) {
       console.warn("Failed to load workspace from Drive; using default.", cause);
     }
-    return getDefaultDevWorkspace();
+    // Return an empty workspace so the user can pick a spreadsheet.
+    return JSON.stringify({
+      tabs: [{
+        label: "New timeline",
+        spreadsheetId: "",
+        spreadsheetName: "",
+        spreadsheetUrl: "",
+        sheetName: "",
+        activePanel: "settings",
+        configured: false,
+      }],
+    });
   }
 
   // --- Local dev mode ---
