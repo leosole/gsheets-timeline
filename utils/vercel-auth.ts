@@ -26,6 +26,8 @@ const EMAIL_KEY = "timeline-google-email";
  * - Store workspace in the user's Drive
  */
 const OAUTH_SCOPES = [
+  "openid",
+  "email",
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive.file",
 ].join(" ");
