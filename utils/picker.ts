@@ -1,4 +1,5 @@
 import { fetchPickerConfig } from "./sheet-host";
+import { getAccessToken, isVercelMode } from "./vercel-auth";
 import type { SheetSelection } from "./workspace";
 
 const GAPI_SRC = "https://apis.google.com/js/api.js";
@@ -37,14 +38,32 @@ const loadGapi = (): Promise<any> => {
 
 /**
  * Opens the Google Picker and resolves with the chosen spreadsheet, or null if
- * the user cancels. Inside the Apps Script sandbox the origin must be the
- * iframe's own origin, not the top-level one.
+ * the user cancels.
+ *
+ * - In Apps Script: uses the server-provided OAuth token.
+ * - On Vercel: the user's OAuth token (same one used for Sheets reads) is
+ *   reused for the Picker — one consent flow covers everything.
+ * - In local dev: the Picker is not available (returns null).
  */
 export const pickSpreadsheet = async (): Promise<Omit<
   SheetSelection,
   "sheetName"
 > | null> => {
   const [, config] = await Promise.all([loadGapi(), fetchPickerConfig()]);
+
+  // On Vercel, use the same user OAuth token that's used for Sheets reads.
+  // The user will have already consented to Sheets + Drive scopes, so no
+  // extra consent screen is shown for the Picker.
+  let token = config.token;
+  if (isVercelMode() && !token) {
+    token = await getAccessToken();
+  }
+
+  if (!token) {
+    // In local dev without Apps Script, no token is available.
+    return null;
+  }
+
   const picker = (globalThis as any).google.picker;
   const origin =
     (globalThis as any).google?.script?.host?.origin ?? window.location.origin;
@@ -57,7 +76,7 @@ export const pickSpreadsheet = async (): Promise<Omit<
 
     const builder = new picker.PickerBuilder()
       .setTitle("Select a spreadsheet")
-      .setOAuthToken(config.token)
+      .setOAuthToken(token)
       .setDeveloperKey(config.developerKey)
       .setAppId(config.appId)
       .setOrigin(origin)
