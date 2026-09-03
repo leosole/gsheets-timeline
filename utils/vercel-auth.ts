@@ -129,25 +129,37 @@ function decodeIdTokenEmail(idToken: string): string | null {
 // Email allowlist
 // ---------------------------------------------------------------------------
 
-function getAllowedEmails(): string[] {
-  const raw =
-    (import.meta as any).env?.VITE_ALLOWED_EMAILS ||
-    (window as any).__ALLOWED_EMAILS__ ||
-    "";
-  if (!raw || typeof raw !== "string") return [];
-  return raw
-    .split(",")
-    .map((e: string) => e.trim().toLowerCase())
-    .filter(Boolean);
+let cachedAllowlist: string[] | null = null;
+
+async function getAllowedEmails(): Promise<string[]> {
+  if (cachedAllowlist) return cachedAllowlist;
+
+  try {
+    const res = await fetch("/allowlist.json");
+    if (!res.ok) {
+      cachedAllowlist = [];
+      return [];
+    }
+    const data = await res.json();
+    cachedAllowlist = (data.emails || [])
+      .map((e: string) => e.trim().toLowerCase())
+      .filter(Boolean);
+    return cachedAllowlist!;
+  } catch {
+    cachedAllowlist = [];
+    return [];
+  }
 }
 
 /**
  * Checks whether the given email is in the allowlist.
  * Returns true if no allowlist is configured (open access).
  */
-export function isEmailAllowed(email: string | null): boolean {
+export async function isEmailAllowed(
+  email: string | null,
+): Promise<boolean> {
   if (!email) return false;
-  const allowed = getAllowedEmails();
+  const allowed = await getAllowedEmails();
   if (allowed.length === 0) return true; // No list = open access
   return allowed.includes(email.toLowerCase());
 }

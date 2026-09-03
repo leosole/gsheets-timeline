@@ -43,14 +43,22 @@ export const App: React.FC = () => {
   const [authState, setAuthState] = useState<AuthState>(() => {
     if (!isVercelMode()) return "authorized";
     if (!isAuthenticated()) return "signed-out";
-    const email = getCachedEmail();
-    if (!isEmailAllowed(email)) return "unauthorized";
-    return "authorized";
+    return "loading"; // will check allowlist async below
   });
   const [authLoading, setAuthLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(
     isVercelMode() ? getCachedEmail() : null,
   );
+
+  // On mount, if we have a cached token, verify the email against the allowlist.
+  useEffect(() => {
+    if (authState !== "loading") return;
+    const email = getCachedEmail();
+    setUserEmail(email);
+    isEmailAllowed(email).then((allowed) => {
+      setAuthState(allowed ? "authorized" : "unauthorized");
+    });
+  }, [authState]);
 
   const [dark, setDark] = useState(() => {
     if (typeof localStorage !== "undefined") {
@@ -133,12 +141,11 @@ export const App: React.FC = () => {
               setAuthLoading(true);
               setLoadError(null);
               requestAccessToken()
-                .then(() => {
+                .then(async () => {
                   const email = getCachedEmail();
                   setUserEmail(email);
-                  setAuthState(
-                    isEmailAllowed(email) ? "authorized" : "unauthorized",
-                  );
+                  const allowed = await isEmailAllowed(email);
+                  setAuthState(allowed ? "authorized" : "unauthorized");
                 })
                 .catch((cause: unknown) => {
                   setLoadError(
