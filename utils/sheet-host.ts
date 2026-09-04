@@ -306,14 +306,47 @@ function detectConfig(headers: string[]) {
   const find = (patterns: RegExp[]) =>
     headers.find((h) => patterns.some((p) => p.test(h))) || "";
 
+  // Primary: strict full-header matches.
+  // Fallback: word-boundary contains match so that columns like
+  // "Data Início", "Início Date", "Start Date (BR)" etc. are found.
+  const findOrContains = (
+    strict: RegExp[],
+    loose: RegExp[],
+  ): string => find(strict) || find(loose);
+
   return {
     title: "",
-    statusField: find([/^(status|estado|situacao|state)$/i]),
+    statusField: find([
+      /^(status|estado|situacao|situação|state)$/i,
+    ]),
     fieldMap: {
-      name: find([/^(name|task|title)$/i]) || headers[0] || "",
-      start: find([/^(start|start date|inicio|date inicio|início)$/i]),
-      end: find([/^(end|end date|fim|date fim)$/i]),
-      due: find([/^(due|due date|deadline|prazo|previsto)$/i]),
+      name:
+        find([/^(name|task|title|tarefa|nome|atividade)$/i]) ||
+        headers[0] ||
+        "",
+      start: findOrContains(
+        [
+          /^(start|start date|beginning)$/i,
+          /^(inicio|date inicio|início)$/i,
+          /^data\s+(de\s+)?(início|inicio|start)$/i,
+        ],
+        [/\b(start|inicio|início)\b/i],
+      ),
+      end: findOrContains(
+        [
+          /^(end|end date|finish|completion)$/i,
+          /^(fim|date fim|termino|término)$/i,
+          /^data\s+(de\s+)?(fim|termino|término|end)$/i,
+        ],
+        [/\b(end|fim|termino|término)\b/i],
+      ),
+      due: findOrContains(
+        [
+          /^(due|due date|deadline|prazo|previsto)$/i,
+          /^(data\s+)?(prevista|previsão|previsao)$/i,
+        ],
+        [/\b(deadline|prazo|previsto|previsão|previsao)\b/i],
+      ),
     },
     popupFields: [],
     filterFields: [],
