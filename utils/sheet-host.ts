@@ -270,11 +270,15 @@ async function sheetsGet(
 async function sheetsGetValues(
   spreadsheetId: string,
   range: string,
+  extraParams?: Record<string, string>,
 ): Promise<any> {
   const token = await getAccessToken();
-  const res = await fetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}`,
-    { headers: { Authorization: `Bearer ${token}` } },
+  let url = `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}`;
+  if (extraParams && Object.keys(extraParams).length > 0) {
+    url += `?${new URLSearchParams(extraParams)}`;
+  }
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` } },
   );
   if (!res.ok) {
     const body = await res.text();
@@ -473,7 +477,9 @@ export const fetchSheetState = async (
     const effectiveSheet = sheetName || meta.sheetNames[0] || "Sheet1";
 
     const range = `${effectiveSheet}!1:50`;
-    const res = await sheetsGetValues(spreadsheetId, range);
+    const res = await sheetsGetValues(spreadsheetId, range, {
+      dateTimeRenderOption: "SERIAL_NUMBER",
+    });
     const values: any[][] = res.values || [];
 
     const headerRowIndex = findHeaderRowIndex(values);
@@ -506,7 +512,9 @@ export const fetchSheetRows = async (
     const meta = await fetchSpreadsheetMeta(spreadsheetId);
     const effectiveSheet = sheetName || meta.sheetNames[0] || "Sheet1";
 
-    const res = await sheetsGetValues(spreadsheetId, effectiveSheet);
+    const res = await sheetsGetValues(spreadsheetId, effectiveSheet, {
+      dateTimeRenderOption: "SERIAL_NUMBER",
+    });
     const values: any[][] = res.values || [];
 
     if (values.length === 0) return { rows: [], headers: [] };
@@ -556,7 +564,9 @@ export const fetchSheetRowGroups = async (
 
       // Read first 50 rows to find header position.
       const range = `${effectiveSheet}!1:50`;
-      const res = await sheetsGetValues(spreadsheetId, range);
+      const res = await sheetsGetValues(spreadsheetId, range, {
+        dateTimeRenderOption: "SERIAL_NUMBER",
+      });
       const values: any[][] = res.values || [];
 
       const headerRowIndex = findHeaderRowIndex(values);
