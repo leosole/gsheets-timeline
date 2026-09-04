@@ -353,7 +353,8 @@ export const fetchWorkspace = async (): Promise<string> => {
     } catch (cause) {
       console.warn("Failed to load workspace from Drive; using default.", cause);
     }
-    return getDefaultDevWorkspace();
+    // Return an empty workspace so the user can pick a spreadsheet.
+    return JSON.stringify({ tabs: [] });
   }
 
   // --- Local dev mode ---
