@@ -91,14 +91,42 @@ export const getCurrentDatePosition = (timelineData: TimelineData): number => {
 const BR_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/
 
 // Excel serial number → Date.  Excel's epoch is 1899-12-30 (serial 0).
-// For dates after 1900 the formula is simply:
-//   date = new Date((serial - 25569) * 86400000)
-// where 25569 = days between 1899-12-30 and 1970-01-01.
+// The Sheets API's dateTimeRenderOption=SERIAL_NUMBER returns these serials
+// as plain numbers, e.g. 45841 for 2025-07-03 and 45841.625 for a datetime.
+// 25569 = days between the Excel epoch and the Unix epoch.
 const EXCEL_EPOCH_OFFSET = 25569
-const SERIAL_RE = /^(\d{1,6})$/
+const MS_PER_DAY = 86_400_000
+const SERIAL_MIN = 2 // 1900-01-01
+const SERIAL_MAX = 73_706 // 2100-01-01
+// Numeric string forms the API can deliver serials in: "45841", "45841.625",
+// ".5", or with an exponent. Pure-integer strings are also matched so cached
+// rows saved as strings still parse.
+const SERIAL_LIKE_RE = /^\d{1,6}(\.\d+)?$/
 
-export const parseDate = (date: string | null | undefined): dayjs.Dayjs | null => {
-  if (!date) return null
+// Convert an Excel serial (integer or fractional) to an ISO date string
+// using UTC arithmetic so the calendar day is stable in every timezone.
+export const serialToISO = (serial: number): string | null => {
+  if (!Number.isFinite(serial) || serial < SERIAL_MIN || serial > SERIAL_MAX) {
+    return null
+  }
+  const ms = (serial - EXCEL_EPOCH_OFFSET) * MS_PER_DAY
+  const d = new Date(ms)
+  const yr = d.getUTCFullYear()
+  if (yr < 1900 || yr > 2100) return null
+  return d.toISOString().slice(0, 10)
+}
+
+export const parseDate = (date: string | number | null | undefined): dayjs.Dayjs | null => {
+  if (date === null || date === undefined || date === "") return null
+
+  // 0. Excel serial number (Sheets API with dateTimeRenderOption=SERIAL_NUMBER).
+  //    Accepts actual numbers or their string form, including fractional
+  //    datetime serials like "45841.625".
+  if (typeof date === "number" || SERIAL_LIKE_RE.test(String(date))) {
+    const iso = serialToISO(Number(date))
+    if (iso) return dayjs(iso, 'YYYY-MM-DD')
+  }
+
   const trimmed = String(date).trim()
 
   // 1. BR slash format: DD/MM/YYYY
@@ -109,23 +137,7 @@ export const parseDate = (date: string | null | undefined): dayjs.Dayjs | null =
     return dayjs(`${year}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`, 'YYYY-MM-DD')
   }
 
-  // 2. Excel serial number (Sheets API with dateTimeRenderOption=SERIAL_NUMBER)
-  const serialMatch = trimmed.match(SERIAL_RE)
-  if (serialMatch) {
-    const serial = Number(serialMatch[1])
-    // Only convert values that could plausibly be dates (1900-01-01 → ~73000).
-    if (serial >= 2 && serial <= 100000) {
-      const ms = (serial - EXCEL_EPOCH_OFFSET) * 86400000
-      const d = new Date(ms)
-      // Sanity-check: year must be in a reasonable range.
-      const yr = d.getFullYear()
-      if (yr >= 1900 && yr <= 2100) {
-        return dayjs(d)
-      }
-    }
-  }
-
-  // 3. Fallback: let dayjs try its default parsing (ISO 8601, etc.)
+  // 2. Fallback: let dayjs try its default parsing (ISO 8601, etc.)
   return dayjs(trimmed)
 }
 

@@ -22,7 +22,6 @@ import {
   type SheetRowGroupMeta,
   writeCachedSheetRows,
 } from "../utils/sheet-host";
-import { parseDate } from "../utils/date-utils";
 import {
   getDefaultTabLabel,
   type ActivePanel,
@@ -272,45 +271,6 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     [rows, tab.config.fieldMap],
   );
   const showInitialLoading = loading && tasks.length === 0;
-
-  // When rows are loaded but no task has a *parseable* start date,
-  // the stored fieldMap is likely stale (e.g. loaded from Drive for a
-  // different spreadsheet).  Re-detect once so the timeline can render.
-  // We check for parseable dates, not just truthy strings, because a
-  // stale fieldMap may map start to a text column (e.g. status), which
-  // produces truthy but unparsable values that block redetection.
-  const hasAnyStartDate = tasks.some(
-    (t) => t.start && parseDate(t.start)?.isValid(),
-  );
-  const redetectRef = useRef(false);
-  useEffect(() => {
-    if (
-      !spreadsheetId ||
-      redetectRef.current ||
-      rows.length === 0 ||
-      hasAnyStartDate
-    ) {
-      return;
-    }
-    redetectRef.current = true;
-    void loadSheetState(
-      {
-        spreadsheetId,
-        spreadsheetName,
-        spreadsheetUrl,
-        sheetName,
-      },
-      true,
-    );
-  }, [
-    spreadsheetId,
-    spreadsheetName,
-    spreadsheetUrl,
-    sheetName,
-    rows.length,
-    hasAnyStartDate,
-    loadSheetState,
-  ]);
 
   function onSync() {
     loadRows();
