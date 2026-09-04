@@ -90,15 +90,43 @@ export const getCurrentDatePosition = (timelineData: TimelineData): number => {
 
 const BR_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/
 
+// Excel serial number → Date.  Excel's epoch is 1899-12-30 (serial 0).
+// For dates after 1900 the formula is simply:
+//   date = new Date((serial - 25569) * 86400000)
+// where 25569 = days between 1899-12-30 and 1970-01-01.
+const EXCEL_EPOCH_OFFSET = 25569
+const SERIAL_RE = /^(\d{1,6})$/
+
 export const parseDate = (date: string | null | undefined): dayjs.Dayjs | null => {
   if (!date) return null
-  const m = date.trim().match(BR_DATE_RE)
-  if (m) {
-    let year = m[3]
+  const trimmed = String(date).trim()
+
+  // 1. BR slash format: DD/MM/YYYY
+  const brMatch = trimmed.match(BR_DATE_RE)
+  if (brMatch) {
+    let year = brMatch[3]
     if (year.length === 2) year = '20' + year
-    return dayjs(`${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`, 'YYYY-MM-DD')
+    return dayjs(`${year}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`, 'YYYY-MM-DD')
   }
-  return dayjs(date)
+
+  // 2. Excel serial number (Sheets API with dateTimeRenderOption=SERIAL_NUMBER)
+  const serialMatch = trimmed.match(SERIAL_RE)
+  if (serialMatch) {
+    const serial = Number(serialMatch[1])
+    // Only convert values that could plausibly be dates (1900-01-01 → ~73000).
+    if (serial >= 2 && serial <= 100000) {
+      const ms = (serial - EXCEL_EPOCH_OFFSET) * 86400000
+      const d = new Date(ms)
+      // Sanity-check: year must be in a reasonable range.
+      const yr = d.getFullYear()
+      if (yr >= 1900 && yr <= 2100) {
+        return dayjs(d)
+      }
+    }
+  }
+
+  // 3. Fallback: let dayjs try its default parsing (ISO 8601, etc.)
+  return dayjs(trimmed)
 }
 
 export const formatDateToISO = (date: string | null | undefined): string | null => {
