@@ -34,74 +34,54 @@ async function driveGet(url: string): Promise<any> {
   return res.json();
 }
 
-async function driveUpload(
-  url: string,
+/**
+ * Create a Drive file from metadata only (no content body).
+ * Used for folder creation and initial file creation.
+ */
+async function driveCreateFile(
   metadata: Record<string, unknown>,
-  body: string,
-): Promise<any> {
+): Promise<string> {
   const token = await getAccessToken();
-  const boundary = "----TimelineBoundary";
-  const parts = [
-    `--${boundary}`,
-    `Content-Type: ${MIME_JSON}`,
-    "",
-    JSON.stringify(metadata),
-    `--${boundary}`,
-    `Content-Type: ${MIME_JSON}`,
-    "",
-    body,
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  const res = await fetch(url, {
+  const res = await fetch(`${DRIVE_API}/files`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
+      "Content-Type": "application/json",
     },
-    body: parts,
+    body: JSON.stringify(metadata),
   });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive create file error (${res.status}): ${text}`);
+  }
+  const data = await res.json();
+  return data.id as string;
+}
 
+/**
+ * Upload raw content to an existing Drive file using uploadType=media.
+ * This replaces the manual multipart approach that caused parse errors.
+ */
+async function driveUploadMedia(
+  fileId: string,
+  content: string,
+): Promise<void> {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${DRIVE_UPLOAD}/files/${fileId}?uploadType=media`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": MIME_JSON,
+      },
+      body: content,
+    },
+  );
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Drive upload error (${res.status}): ${text}`);
   }
-  return res.json();
-}
-
-async function drivePatch(
-  url: string,
-  metadata: Record<string, unknown>,
-  body: string,
-): Promise<any> {
-  const token = await getAccessToken();
-  const boundary = "----TimelineBoundary";
-  const parts = [
-    `--${boundary}`,
-    `Content-Type: ${MIME_JSON}`,
-    "",
-    JSON.stringify(metadata),
-    `--${boundary}`,
-    `Content-Type: ${MIME_JSON}`,
-    "",
-    body,
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  const res = await fetch(url, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
-    },
-    body: parts,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Drive patch error (${res.status}): ${text}`);
-  }
-  return res.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -119,13 +99,12 @@ async function findOrCreateFolder(name: string): Promise<string> {
     return list.files[0].id;
   }
 
-  // Create the folder.
-  const created = await driveUpload(
-    `${DRIVE_API}/files?uploadType=multipart`,
-    { name, mimeType: "application/vnd.google-apps.folder" },
-    "",
-  );
-  return created.id;
+  // Create the folder via REST API (no multipart needed).
+  const folderId = await driveCreateFile({
+    name,
+    mimeType: "application/vnd.google-apps.folder",
+  });
+  return folderId;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +158,8 @@ export async function loadWorkspaceFromDrive(): Promise<string> {
  * Saves the workspace JSON to the user's Google Drive.
  *
  * Creates the file if it doesn't exist, updates it if it does.
+ * Uses a two-step approach: create/update metadata via REST API,
+ * then upload content via uploadType=media (avoids multipart encoding).
  */
 export async function saveWorkspaceToDrive(json: string): Promise<void> {
   const folderId = await findOrCreateFolder(FOLDER_NAME);
@@ -191,18 +172,11 @@ export async function saveWorkspaceToDrive(json: string): Promise<void> {
   };
 
   if (fileId) {
-    // Update existing file.
-    await drivePatch(
-      `${DRIVE_UPLOAD}/files/${fileId}?uploadType=multipart`,
-      metadata,
-      json,
-    );
+    // Update existing file content.
+    await driveUploadMedia(fileId, json);
   } else {
-    // Create new file.
-    await driveUpload(
-      `${DRIVE_API}/files?uploadType=multipart`,
-      metadata,
-      json,
-    );
+    // Create new file with metadata, then upload content.
+    const newFileId = await driveCreateFile(metadata);
+    await driveUploadMedia(newFileId, json);
   }
 }
