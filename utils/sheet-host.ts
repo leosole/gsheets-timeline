@@ -61,6 +61,10 @@ const ROW_CACHE_PREFIX = "timeline-row-cache:";
 const ROW_CACHE_INDEX_KEY = "timeline-row-cache:index";
 const MAX_ROW_CACHE_BYTES = 1_500_000;
 const MAX_ROW_CACHE_ENTRIES = 5;
+const SERIAL_DATE_VALUE_OPTIONS = {
+  valueRenderOption: "UNFORMATTED_VALUE",
+  dateTimeRenderOption: "SERIAL_NUMBER",
+};
 
 const getDefaultDevWorkspace = (): string =>
   JSON.stringify({
@@ -478,7 +482,7 @@ export const fetchSheetState = async (
 
     const range = `${effectiveSheet}!1:50`;
     const res = await sheetsGetValues(spreadsheetId, range, {
-      dateTimeRenderOption: "SERIAL_NUMBER",
+      ...SERIAL_DATE_VALUE_OPTIONS,
     });
     const values: any[][] = res.values || [];
 
@@ -513,7 +517,7 @@ export const fetchSheetRows = async (
     const effectiveSheet = sheetName || meta.sheetNames[0] || "Sheet1";
 
     const res = await sheetsGetValues(spreadsheetId, effectiveSheet, {
-      dateTimeRenderOption: "SERIAL_NUMBER",
+      ...SERIAL_DATE_VALUE_OPTIONS,
     });
     const values: any[][] = res.values || [];
 
@@ -565,7 +569,7 @@ export const fetchSheetRowGroups = async (
       // Read first 50 rows to find header position.
       const range = `${effectiveSheet}!1:50`;
       const res = await sheetsGetValues(spreadsheetId, range, {
-        dateTimeRenderOption: "SERIAL_NUMBER",
+        ...SERIAL_DATE_VALUE_OPTIONS,
       });
       const values: any[][] = res.values || [];
 
