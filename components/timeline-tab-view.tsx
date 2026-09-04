@@ -272,16 +272,20 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
   );
   const showInitialLoading = loading && tasks.length === 0;
 
-  // When rows are loaded but every task is filtered out by the field map,
-  // the stored config is likely stale (e.g. loaded from Drive for a
+  // When rows are loaded but every task has an empty start date,
+  // the stored fieldMap is likely stale (e.g. loaded from Drive for a
   // different spreadsheet).  Re-detect once so the timeline can render.
+  // We check for *any* task with a valid start rather than tasks.length > 0
+  // because sanitizeSpreadsheetData keeps tasks with a valid name even
+  // when start/end/due are all empty (fieldMap.start mismatch).
+  const hasAnyStartDate = tasks.some((t) => t.start);
   const redetectRef = useRef(false);
   useEffect(() => {
     if (
       !spreadsheetId ||
       redetectRef.current ||
       rows.length === 0 ||
-      tasks.length > 0
+      hasAnyStartDate
     ) {
       return;
     }
@@ -301,7 +305,7 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
     spreadsheetUrl,
     sheetName,
     rows.length,
-    tasks.length,
+    hasAnyStartDate,
     loadSheetState,
   ]);
 
