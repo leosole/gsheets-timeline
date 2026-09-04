@@ -90,15 +90,40 @@ export const getCurrentDatePosition = (timelineData: TimelineData): number => {
 
 const BR_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/
 
+// Matches Google Sheets formatted dates using Portuguese abbreviated months,
+// e.g. "3-jul.-25", "03-jul-2025", "15/dez./24"
+const PT_MONTH_ABBR: Record<string, number> = {
+  jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5,
+  jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
+}
+const PT_ABBR_RE = /^(\d{1,2})[-/](\w{3})\.?[-/](\d{2,4})$/
+
 export const parseDate = (date: string | null | undefined): dayjs.Dayjs | null => {
   if (!date) return null
-  const m = date.trim().match(BR_DATE_RE)
-  if (m) {
-    let year = m[3]
+  const trimmed = date.trim()
+
+  // 1. BR slash format: DD/MM/YYYY
+  const brMatch = trimmed.match(BR_DATE_RE)
+  if (brMatch) {
+    let year = brMatch[3]
     if (year.length === 2) year = '20' + year
-    return dayjs(`${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`, 'YYYY-MM-DD')
+    return dayjs(`${year}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`, 'YYYY-MM-DD')
   }
-  return dayjs(date)
+
+  // 2. Portuguese abbreviated month: D-MMM.-YY  (e.g. 3-jul.-25)
+  const ptMatch = trimmed.match(PT_ABBR_RE)
+  if (ptMatch) {
+    const month = PT_MONTH_ABBR[ptMatch[2].toLowerCase()]
+    if (month !== undefined) {
+      const day = parseInt(ptMatch[1], 10)
+      let year = parseInt(ptMatch[3], 10)
+      if (year < 100) year += 2000
+      return dayjs(new Date(year, month, day))
+    }
+  }
+
+  // 3. Fallback: let dayjs try its default parsing (ISO 8601, etc.)
+  return dayjs(trimmed)
 }
 
 export const formatDateToISO = (date: string | null | undefined): string | null => {
