@@ -272,6 +272,39 @@ export const TimelineTabView: React.FC<TimelineTabViewProps> = ({
   );
   const showInitialLoading = loading && tasks.length === 0;
 
+  // When rows are loaded but every task is filtered out by the field map,
+  // the stored config is likely stale (e.g. loaded from Drive for a
+  // different spreadsheet).  Re-detect once so the timeline can render.
+  const redetectRef = useRef(false);
+  useEffect(() => {
+    if (
+      !spreadsheetId ||
+      redetectRef.current ||
+      rows.length === 0 ||
+      tasks.length > 0
+    ) {
+      return;
+    }
+    redetectRef.current = true;
+    void loadSheetState(
+      {
+        spreadsheetId,
+        spreadsheetName,
+        spreadsheetUrl,
+        sheetName,
+      },
+      true,
+    );
+  }, [
+    spreadsheetId,
+    spreadsheetName,
+    spreadsheetUrl,
+    sheetName,
+    rows.length,
+    tasks.length,
+    loadSheetState,
+  ]);
+
   function onSync() {
     loadRows();
     setGeneratedAt(new Date().toLocaleString("pt-BR"));

@@ -234,7 +234,7 @@ export const App: React.FC = () => {
     );
   }
 
-  const activeTab = getActiveTab(workspace);
+  const activeTab = getActiveTab(workspace) ?? createTab({ activePanel: "settings" });
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
